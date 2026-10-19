@@ -1,0 +1,11 @@
+services:
+  jarvis-api:
+    # CI sets JARVIS_IMAGE=ghcr.io/<owner>/jarvis-api:latest
+    image: ${JARVIS_IMAGE:-ghcr.io/owner/jarvis-api:latest}
+    container_name: jarvis-api
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      RUST_LOG: jarvis_api=info,tower_http=info
+    restart: unless-stopped

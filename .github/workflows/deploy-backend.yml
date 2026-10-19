@@ -1,0 +1,109 @@
+name: Deploy backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/backend/**"
+      - "deploy/oci/**"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: jarvis-api
+  # Oracle Always Free Ampere = arm64. Override to linux/amd64 if the VM is x86_64.
+  DOCKER_PLATFORM: linux/arm64
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags
+        id: meta
+        run: |
+          OWNER_LC=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          IMAGE="${{ env.REGISTRY }}/${OWNER_LC}/${{ env.IMAGE_NAME }}"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "tags=${IMAGE}:latest,${IMAGE}:sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./apps/backend
+          file: ./apps/backend/Dockerfile
+          platforms: ${{ env.DOCKER_PLATFORM }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy compose file to OCI
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          source: deploy/oci/docker-compose.yml
+          target: /tmp/jarvis-deploy
+          strip_components: 2
+
+      - name: Pull and restart on OCI
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}:latest
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          envs: IMAGE
+          script: |
+            set -euo pipefail
+            DEPLOY_DIR="$HOME/jarvis"
+            mkdir -p "$DEPLOY_DIR"
+            mv /tmp/jarvis-deploy/docker-compose.yml "$DEPLOY_DIR/docker-compose.yml"
+            cd "$DEPLOY_DIR"
+            export JARVIS_IMAGE="${IMAGE}"
+            docker compose pull
+            docker compose up -d --remove-orphans
+            docker image prune -f
+
+      - name: Smoke test health
+        env:
+          BASE_URL: ${{ secrets.OCI_PUBLIC_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BASE_URL}" ]; then
+            echo "OCI_PUBLIC_URL not set — skipping smoke test"
+            exit 0
+          fi
+          URL="${BASE_URL%/}/health"
+          for i in 1 2 3 4 5; do
+            if curl -fsS "$URL"; then
+              echo
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Health check failed: $URL"
+          exit 1

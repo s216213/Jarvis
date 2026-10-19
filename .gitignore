@@ -1,0 +1,36 @@
+# Rust
+apps/backend/target/
+**/*.rs.bk
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Node (future apps/web)
+node_modules/
+.next/
+out/
+dist/
+
+# Flutter (future apps/android)
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+**/build/
+
+# C# (future apps/desktop)
+**/bin/
+**/obj/
+*.user
+*.suo
+
+# Docker
+*.log
