@@ -50,6 +50,13 @@ jobs:
             set -euo pipefail
             DEPLOY_DIR="$HOME/jarvis"
             mkdir -p "$DEPLOY_DIR"
+
+            if [ ! -f "$DEPLOY_DIR/.env" ]; then
+              echo "ERROR: Missing $DEPLOY_DIR/.env"
+              echo "Create it manually on the VM (copy from deploy/oci/.env.example). CI will never write secrets."
+              exit 1
+            fi
+
             rm -rf "$DEPLOY_DIR/backend"
             mv /tmp/jarvis-upload/backend "$DEPLOY_DIR/backend"
             mv /tmp/jarvis-upload/docker-compose.yml "$DEPLOY_DIR/docker-compose.yml"

@@ -3,16 +3,16 @@
 FROM rust:1-bookworm AS builder
 WORKDIR /app
 
-# Cache dependency crates (reused on the VM between deploys)
 COPY Cargo.toml Cargo.lock ./
+COPY migrations ./migrations
 RUN mkdir src \
     && echo "fn main() {}" > src/main.rs \
-    && cargo build --release \
+    && cargo build --release --no-default-features --features db-postgres \
     && rm -rf src
 
 COPY src ./src
 RUN touch src/main.rs \
-    && cargo build --release
+    && cargo build --release --no-default-features --features db-postgres
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \

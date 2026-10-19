@@ -1,5 +1,8 @@
 # Rust
 apps/backend/target/
+apps/backend/data/
+**/*.db
+**/*.db-*
 **/*.rs.bk
 
 # IDE / OS
@@ -13,6 +16,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+!**/.env.example
 
 # Node (future apps/web)
 node_modules/
