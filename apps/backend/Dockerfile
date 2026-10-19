@@ -3,10 +3,16 @@
 FROM rust:1-bookworm AS builder
 WORKDIR /app
 
+# Cache dependency crates (reused on the VM between deploys)
 COPY Cargo.toml Cargo.lock ./
-COPY src ./src
+RUN mkdir src \
+    && echo "fn main() {}" > src/main.rs \
+    && cargo build --release \
+    && rm -rf src
 
-RUN cargo build --release
+COPY src ./src
+RUN touch src/main.rs \
+    && cargo build --release
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
