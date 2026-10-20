@@ -1,0 +1,15 @@
+---
+description: future-ui-v1 jest obowiązkowym wyglądem każdego klienta Jarvis (web, android, desktop)
+alwaysApply: true
+---
+
+# future-ui-v1
+
+Każdy interfejs klienta Jarvis — `apps/web`, `apps/android` i `apps/desktop` — używa systemu **future-ui-v1**.
+
+- Źródło tokenów: `design/future-ui-v1/tokens.json`
+- Web: `apps/web/src/app/globals.css` i komponenty w `apps/web/src/components/future/`
+- Android (Flutter) i desktop (C#) mają wyglądać tak samo: ciemne szkło, cyan/fiolet, te same role kolorów i typografii
+- Nie wprowadzaj drugiego motywu, jasnego panelu ani osobnej estetyki „admin vs czat”
+- Rejestracja urządzenia (`POST /me/devices`) rozdziela wersje: `ui_version` (teraz `future-ui-v1`), `client_version` (wersja aplikacji) oraz `system_name` i `system_version`. `platform` to `web`, `android` albo `desktop`
+- Wersja samego Jarvisa to trzy pola: `ui_version` (wersja klienta UI), `brain_version` (wersja backendu z `GET /version`) i `system_version` (wersja systemu hosta, na którym działa backend)

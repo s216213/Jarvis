@@ -18,6 +18,9 @@ pub struct Config {
     pub llm_max_input_chars: usize,
     pub llm_context_messages: usize,
     pub llm_max_inflight: usize,
+    /// `host` runs the admin terminal in the OCI VM namespaces (nsenter).
+    /// `container` runs it in the API process.
+    pub host_exec: String,
 }
 
 impl Config {
@@ -71,6 +74,10 @@ impl Config {
             llm_max_input_chars: parse_or("LLM_MAX_INPUT_CHARS", 4000),
             llm_context_messages: parse_or("LLM_CONTEXT_MESSAGES", 20),
             llm_max_inflight: parse_or("LLM_MAX_INFLIGHT", 3),
+            host_exec: std::env::var("JARVIS_HOST_EXEC")
+                .unwrap_or_else(|_| "container".into())
+                .trim()
+                .to_lowercase(),
         })
     }
 }

@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::{
     auth::jwt,
-    error::AppError,
+    error::{AppError, AppResult},
     models::user::User,
     state::AppState,
 };
@@ -18,6 +18,14 @@ pub struct AuthUser {
 impl AuthUser {
     pub fn is_admin(&self) -> bool {
         self.role == "admin"
+    }
+
+    pub fn require_admin(&self) -> AppResult<()> {
+        if self.is_admin() {
+            Ok(())
+        } else {
+            Err(AppError::Forbidden)
+        }
     }
 }
 

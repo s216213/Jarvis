@@ -42,6 +42,85 @@ export type LlmStatus = {
   };
 };
 
+export type HostCore = {
+  name: string;
+  usage_percent: number;
+};
+
+export type HostDisk = {
+  name: string;
+  mount: string;
+  total_bytes: number;
+  available_bytes: number;
+  used_bytes: number;
+  scope: string;
+};
+
+export type HostSnapshot = {
+  mode: string;
+  recommended_poll_sec: number;
+  exec_mode: string;
+  hostname: string;
+  os: string;
+  kernel: string;
+  arch: string;
+  uptime_sec: number;
+  load_1: number;
+  load_5: number;
+  load_15: number;
+  cpu_count: number;
+  cpu_usage_percent: number;
+  cores: HostCore[];
+  memory_total_bytes: number;
+  memory_used_bytes: number;
+  memory_available_bytes: number;
+  swap_total_bytes: number;
+  swap_used_bytes: number;
+  disks: HostDisk[];
+  process_count: number;
+  collected_at: string;
+};
+
+export type ExecResult = {
+  stdout: string;
+  stderr: string;
+  exit_code: number | null;
+  cwd: string;
+  truncated: boolean;
+  timed_out: boolean;
+  exec_mode: string;
+};
+
+export type JarvisVersion = {
+  brain_version: string;
+  system_name: string;
+  system_version: string;
+};
+
+export type AdminDevice = {
+  id: string;
+  user_id: string;
+  user_email: string;
+  user_display_name: string;
+  name: string;
+  platform: string;
+  ui_version: string;
+  client_version: string;
+  system_name: string;
+  system_version: string;
+  fingerprint: string;
+  last_seen_at: string;
+  is_revoked: boolean;
+  created_at: string;
+};
+
+export type FeatureFlag = {
+  key: string;
+  enabled: boolean;
+  description: string;
+  updated_at: string;
+};
+
 export class ApiError extends Error {
   status: number;
   body: Record<string, unknown>;

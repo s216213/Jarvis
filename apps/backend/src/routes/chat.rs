@@ -10,7 +10,10 @@ use crate::{
         limits,
         provider::ChatTurn,
     },
-    models::message::{Message, SendMessageRequest},
+    models::{
+        flag,
+        message::{Message, SendMessageRequest},
+    },
     state::AppState,
 };
 
@@ -47,6 +50,11 @@ pub async fn send_message(
     let content = body.content.trim().to_string();
     if content.is_empty() {
         return Err(AppError::BadRequest("content is required".into()));
+    }
+    if flag::is_disabled(&state.pool, "chat_enabled").await? {
+        return Err(AppError::BadRequest(
+            "chat is disabled by a feature flag".into(),
+        ));
     }
     if content.chars().count() > state.config.llm_max_input_chars {
         return Err(AppError::BadRequest(format!(

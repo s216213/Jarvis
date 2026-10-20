@@ -1,47 +1,45 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { AppNav } from "@/components/AppNav";
-import {
-  ApiError,
-  api,
-  type Message,
-  type UsageSnapshot,
-} from "@/lib/api";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { AppShell } from "@/components/future/AppShell";
+import { ApiError, api, type Message, type UsageSnapshot } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 
 export default function ChatPage() {
-  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [content, setContent] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [usage, setUsage] = useState<UsageSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const load = useCallback(async () => {
-    const token = getToken();
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
-    const [msgs, snap] = await Promise.all([
-      api<Message[]>("/chat/messages", { token }),
-      api<UsageSnapshot>("/me/usage", { token }),
-    ]);
-    setMessages(msgs);
-    setUsage(snap);
-  }, [router]);
+  const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    load().catch((err) => {
-      if (err instanceof ApiError && err.status === 401) {
-        router.replace("/login");
-        return;
+    let stop = false;
+    (async () => {
+      try {
+        const token = getToken();
+        if (!token) return;
+        const [msgs, snap] = await Promise.all([
+          api<Message[]>("/chat/messages", { token }),
+          api<UsageSnapshot>("/me/usage", { token }),
+        ]);
+        if (stop) return;
+        setMessages(msgs);
+        setUsage(snap);
+      } catch (err) {
+        if (!stop) {
+          setError(err instanceof Error ? err.message : "Nie udało się wczytać czatu.");
+        }
       }
-      setError(err instanceof Error ? err.message : "Nie udało się wczytać czatu.");
-    });
-  }, [load, router]);
+    })();
+    return () => {
+      stop = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [messages]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -53,7 +51,6 @@ export default function ChatPage() {
       const res = await api<{
         user_message: Message;
         assistant_message: Message;
-        model: string;
       }>("/chat/messages", {
         method: "POST",
         token,
@@ -66,9 +63,7 @@ export default function ChatPage() {
     } catch (err) {
       if (err instanceof ApiError && err.isRateLimited) {
         const scope = String(err.body.scope ?? "limit");
-        setError(
-          `Limit AI (${scope}). Spróbuj ponownie za ${err.retryAfterSec || 60}s.`,
-        );
+        setError(`Limit AI (${scope}). Spróbuj ponownie za ${err.retryAfterSec || 60}s.`);
       } else if (err instanceof Error) {
         setError(err.message);
       } else {
@@ -80,45 +75,52 @@ export default function ChatPage() {
   }
 
   return (
-    <main className="shell">
-      <AppNav />
-      <section className="panel">
-        {usage ? (
-          <p className="hint">
-            Zużycie: {usage.user_rpm_used}/{usage.user_rpm_limit} RPM ·{" "}
-            {usage.user_daily_used}/{usage.user_daily_limit} dziennie
-          </p>
-        ) : null}
-        <div className="messages">
+    <AppShell>
+      <section className="fx-card">
+        <div className="fx-page-head">
+          <div>
+            <p className="fx-kicker">Rozmowa</p>
+            <h2>Czat</h2>
+          </div>
+          {usage ? (
+            <p className="fx-note">
+              {usage.user_rpm_used}/{usage.user_rpm_limit} RPM · {usage.user_daily_used}/
+              {usage.user_daily_limit} dziennie
+            </p>
+          ) : null}
+        </div>
+        <div className="fx-messages" aria-live="polite">
           {messages.length === 0 ? (
-            <p className="hint">Brak wiadomości — napisz do Jarvisa.</p>
+            <p className="fx-note">Brak wiadomości — napisz do Jarvisa.</p>
           ) : (
-            messages.map((m) => (
+            messages.map((message) => (
               <article
-                key={m.id}
-                className={`bubble ${m.role === "assistant" ? "assistant" : ""}`}
+                key={message.id}
+                className={`fx-bubble ${message.role === "assistant" ? "assistant" : ""}`}
               >
-                <div className="who">
-                  {m.role === "assistant" ? "Jarvis" : "Ty"}
-                </div>
-                <div className="text">{m.content}</div>
+                <div className="who">{message.role === "assistant" ? "Jarvis" : "Ty"}</div>
+                <div className="text">{message.content}</div>
               </article>
             ))
           )}
+          <div ref={endRef} />
         </div>
-        <form className="composer" onSubmit={onSubmit}>
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Wiadomość do Jarvisa…"
-            required
-          />
-          {error ? <p className="error">{error}</p> : null}
-          <button className="btn" type="submit" disabled={loading}>
+        <form className="fx-stack" onSubmit={onSubmit}>
+          <label className="fx-field">
+            <span>Wiadomość</span>
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="Wiadomość do Jarvisa…"
+              required
+            />
+          </label>
+          {error ? <p className="fx-alert">{error}</p> : null}
+          <button className="fx-btn" type="submit" disabled={loading}>
             {loading ? "Myślę…" : "Wyślij"}
           </button>
         </form>
       </section>
-    </main>
+    </AppShell>
   );
 }

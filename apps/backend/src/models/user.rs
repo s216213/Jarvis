@@ -62,5 +62,6 @@ pub struct UpdateUserRequest {
     pub is_active: Option<bool>,
     pub role: Option<String>,
     pub display_name: Option<String>,
+    pub email: Option<String>,
     pub password: Option<String>,
 }

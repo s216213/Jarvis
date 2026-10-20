@@ -48,3 +48,35 @@ pub async fn ensure_admin(pool: &DbPool, config: &Config) -> AppResult<()> {
     tracing::info!(email = %email, "bootstrap admin created");
     Ok(())
 }
+
+pub async fn ensure_flags(pool: &DbPool) -> AppResult<()> {
+    let defaults = [
+        (
+            "chat_enabled",
+            true,
+            "Czat z Jarvisem. Wyłączenie blokuje nowe wiadomości.",
+        ),
+        (
+            "device_registration",
+            true,
+            "Nowe urządzenia klientów (web, android, desktop). Wyłączenie zostawia już znane urządzenia.",
+        ),
+    ];
+
+    for (key, enabled, description) in defaults {
+        sqlx::query(
+            r#"INSERT INTO feature_flags (key, enabled, description, updated_at)
+               VALUES ($1, $2, $3, $4)
+               ON CONFLICT (key) DO NOTHING"#,
+        )
+        .bind(key)
+        .bind(enabled)
+        .bind(description)
+        .bind(Utc::now())
+        .execute(pool)
+        .await
+        .map_err(|e| AppError::internal(format!("seed flag {key}: {e}")))?;
+    }
+
+    Ok(())
+}

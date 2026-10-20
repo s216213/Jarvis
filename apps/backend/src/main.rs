@@ -3,6 +3,7 @@ mod bootstrap;
 mod config;
 mod db;
 mod error;
+mod host;
 mod llm;
 mod models;
 mod routes;
@@ -51,6 +52,10 @@ async fn main() {
         eprintln!("migrate error: {e}");
         std::process::exit(1);
     });
+    bootstrap::ensure_flags(&pool).await.unwrap_or_else(|e| {
+        eprintln!("flag seed error: {e}");
+        std::process::exit(1);
+    });
     bootstrap::ensure_admin(&pool, &config)
         .await
         .unwrap_or_else(|e| {
@@ -68,6 +73,7 @@ async fn main() {
         llm: Arc::new(llm),
         llm_inflight: Arc::new(Semaphore::new(config.llm_max_inflight.max(1))),
         login_limiter: Arc::new(Mutex::new(LoginLimiter::new())),
+        host: Arc::new(host::HostMonitor::new()),
         config: config.clone(),
     };
 

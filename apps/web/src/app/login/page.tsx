@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, api, type PublicUser } from "@/lib/api";
 import { getToken, setSession } from "@/lib/auth";
+import { FUTURE_UI } from "@/lib/future";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -46,41 +47,41 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="login-stage">
-      <div className="inner">
-        <h1 className="brand">
+    <main className="fx-login">
+      <div className="fx-orb" aria-hidden />
+      <section className="fx-card fx-login-card">
+        <p className="fx-kicker">{FUTURE_UI}</p>
+        <h1>
           Jar<span>vis</span>
         </h1>
-        <p className="lede">Dostęp tylko na zaproszenie administratora.</p>
-        <form className="panel" onSubmit={onSubmit}>
-          <div className="field">
-            <label htmlFor="email">Email</label>
+        <p className="fx-note">Dostęp tylko na zaproszenie administratora.</p>
+        <form onSubmit={onSubmit} className="fx-stack" style={{ marginTop: "1.2rem" }}>
+          <label className="fx-field">
+            <span>Email</span>
             <input
-              id="email"
               type="email"
               autoComplete="username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
             />
-          </div>
-          <div className="field">
-            <label htmlFor="password">Hasło</label>
+          </label>
+          <label className="fx-field">
+            <span>Hasło</span>
             <input
-              id="password"
               type="password"
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
             />
-          </div>
-          {error ? <p className="error">{error}</p> : null}
-          <button className="btn" type="submit" disabled={loading}>
+          </label>
+          {error ? <p className="fx-alert">{error}</p> : null}
+          <button className="fx-btn" type="submit" disabled={loading}>
             {loading ? "Logowanie…" : "Zaloguj"}
           </button>
         </form>
-      </div>
+      </section>
     </main>
   );
 }

@@ -113,3 +113,19 @@ Package manager is pinned via `packageManager` in `apps/web/package.json` (pnpm)
 | GET/POST | `/admin/users` | admin |
 | PATCH/DELETE | `/admin/users/:id` | admin |
 | GET | `/admin/llm/status`, `/admin/llm/models` | admin |
+| GET | `/admin/host/metrics` | admin — OCI VM snapshot (poll every 5s) |
+| POST | `/admin/host/exec` | admin — shell on the API host |
+| POST | `/me/devices` | JWT — device heartbeat |
+| GET/PATCH/DELETE | `/admin/devices`, `/admin/devices/:id` | admin |
+| GET | `/version` | JWT — `brain_version` i wersja systemu hosta |
+| GET | `/flags` | JWT |
+| GET/POST | `/admin/flags` | admin |
+| PATCH/DELETE | `/admin/flags/:key` | admin |
+
+### future-ui-v1
+
+Shared look for web, Android, and desktop. Tokens: [`design/future-ui-v1/tokens.json`](design/future-ui-v1/tokens.json). Web is the implementation; Android and desktop follow the same tokens when those clients are built.
+
+Jarvis version is three parts: the client UI version, `brain_version` (this API, `GET /version`), and the host system version. Device registration stays separate (`ui_version`, `client_version`, `system_name`, `system_version`).
+
+Admin tools (OCI resources, terminal, accounts, devices, feature flags) live in `apps/web` under `/admin`. VM metrics are snapshots polled every 5 seconds. On OCI, compose runs the terminal in the host namespaces (`JARVIS_HOST_EXEC=host`).

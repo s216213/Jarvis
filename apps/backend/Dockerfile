@@ -16,7 +16,7 @@ RUN touch src/main.rs \
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get install -y --no-install-recommends ca-certificates procps util-linux \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -1,243 +1,150 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { AppNav } from "@/components/AppNav";
+import { useEffect, useState } from "react";
+import { JarvisVersionLines } from "@/components/future/JarvisVersion";
+import { Meter } from "@/components/future/Meter";
 import {
-  ApiError,
   api,
+  type FeatureFlag,
+  type HostSnapshot,
+  type JarvisVersion,
   type LlmStatus,
   type PublicUser,
+  type AdminDevice,
 } from "@/lib/api";
-import { getToken, getUser, isAdmin } from "@/lib/auth";
+import { getToken } from "@/lib/auth";
+import { formatBytes, usagePercent } from "@/lib/format";
 
-export default function AdminPage() {
-  const router = useRouter();
+export default function AdminOverviewPage() {
   const [users, setUsers] = useState<PublicUser[]>([]);
+  const [flags, setFlags] = useState<FeatureFlag[]>([]);
+  const [devices, setDevices] = useState<AdminDevice[]>([]);
   const [status, setStatus] = useState<LlmStatus | null>(null);
+  const [host, setHost] = useState<HostSnapshot | null>(null);
+  const [jarvis, setJarvis] = useState<JarvisVersion | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [ok, setOk] = useState<string | null>(null);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [role, setRole] = useState("user");
-  const [saving, setSaving] = useState(false);
-
-  const load = useCallback(async () => {
-    const token = getToken();
-    const me = getUser();
-    if (!token || !isAdmin(me)) {
-      router.replace("/chat");
-      return;
-    }
-    const [list, llm] = await Promise.all([
-      api<PublicUser[]>("/admin/users", { token }),
-      api<LlmStatus>("/admin/llm/status", { token }),
-    ]);
-    setUsers(list);
-    setStatus(llm);
-  }, [router]);
 
   useEffect(() => {
-    load().catch((err) => {
-      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
-        router.replace("/chat");
-        return;
+    let stop = false;
+    const token = getToken();
+    if (!token) return;
+
+    async function loadLists() {
+      const [userRows, flagRows, deviceRows, llm] = await Promise.all([
+        api<PublicUser[]>("/admin/users", { token }),
+        api<FeatureFlag[]>("/admin/flags", { token }),
+        api<AdminDevice[]>("/admin/devices", { token }),
+        api<LlmStatus>("/admin/llm/status", { token }),
+      ]);
+      if (stop) return;
+      setUsers(userRows);
+      setFlags(flagRows);
+      setDevices(deviceRows);
+      setStatus(llm);
+    }
+
+    async function loadHost() {
+      try {
+        const snap = await api<HostSnapshot>("/admin/host/metrics", { token });
+        if (!stop) setHost(snap);
+      } catch (err) {
+        if (!stop) setError(err instanceof Error ? err.message : "Brak metryk hosta.");
       }
-      setError(err instanceof Error ? err.message : "Błąd admina.");
+    }
+
+    loadLists().catch((err) => {
+      if (!stop) setError(err instanceof Error ? err.message : "Błąd panelu.");
     });
-  }, [load, router]);
+    api<JarvisVersion>("/version", { token })
+      .then((row) => {
+        if (!stop) setJarvis(row);
+      })
+      .catch(() => {});
+    loadHost();
+    const timer = window.setInterval(loadHost, 5000);
+    return () => {
+      stop = true;
+      window.clearInterval(timer);
+    };
+  }, []);
 
-  async function onCreate(e: FormEvent) {
-    e.preventDefault();
-    const token = getToken();
-    if (!token) return;
-    setSaving(true);
-    setError(null);
-    setOk(null);
-    try {
-      await api<PublicUser>("/admin/users", {
-        method: "POST",
-        token,
-        body: JSON.stringify({
-          email,
-          password,
-          display_name: displayName,
-          role,
-        }),
-      });
-      setEmail("");
-      setPassword("");
-      setDisplayName("");
-      setRole("user");
-      setOk("Użytkownik dodany.");
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Nie udało się dodać.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function deactivate(id: string) {
-    const token = getToken();
-    if (!token) return;
-    setError(null);
-    try {
-      await api(`/admin/users/${id}`, {
-        method: "PATCH",
-        token,
-        body: JSON.stringify({ is_active: false }),
-      });
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Nie udało się zaktualizować.");
-    }
-  }
-
-  async function remove(id: string) {
-    const token = getToken();
-    if (!token) return;
-    if (!confirm("Usunąć użytkownika na stałe?")) return;
-    setError(null);
-    try {
-      await api(`/admin/users/${id}`, { method: "DELETE", token });
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Nie udało się usunąć.");
-    }
-  }
+  const disk = host?.disks[0];
+  const diskPercent = disk ? usagePercent(disk.used_bytes, disk.total_bytes) : 0;
+  const ramPercent = host
+    ? usagePercent(host.memory_used_bytes, host.memory_total_bytes)
+    : 0;
+  const activeDevices = devices.filter((device) => !device.is_revoked).length;
+  const enabledFlags = flags.filter((flag) => flag.enabled).length;
 
   return (
-    <main className="shell">
-      <AppNav />
-      <section className="panel">
-        <h2 className="brand" style={{ fontSize: "1.4rem" }}>
-          Panel admina
-        </h2>
+    <div className="fx-stack">
+      <header className="fx-page-head">
+        <div>
+          <p className="fx-kicker">Sterowanie</p>
+          <h2>Centrum sterowania</h2>
+          <p>
+            Migawka zasobów OCI co 5 sekund. Strumień na żywo zostaje wyłączony — metryki VM
+            zmieniają się wolniej niż interfejs, a polling nie trzyma stałego połączenia.
+          </p>
+        </div>
+        {host ? <span className="fx-pill">{host.hostname}</span> : null}
+      </header>
 
-        {status ? (
-          <dl className="status-grid">
-            <div>
-              <dt>Provider</dt>
-              <dd>{status.provider}</dd>
-            </div>
-            <div>
-              <dt>Model</dt>
-              <dd>{status.model}</dd>
-            </div>
-            <div>
-              <dt>Źródło</dt>
-              <dd>{status.source}</dd>
-            </div>
-            <div>
-              <dt>Global RPM</dt>
-              <dd>
-                {status.usage.global_rpm_used}/{status.limits.global_rpm}
-              </dd>
-            </div>
-            <div>
-              <dt>Global dziennie</dt>
-              <dd>
-                {status.usage.global_daily_used}/{status.limits.global_daily}
-              </dd>
-            </div>
-          </dl>
-        ) : null}
+      {error ? <p className="fx-alert">{error}</p> : null}
 
-        <h3 style={{ margin: "0 0 0.75rem", fontFamily: "var(--font-display)" }}>
-          Dodaj użytkownika
-        </h3>
-        <form onSubmit={onCreate} className="form-row" style={{ marginBottom: "1.5rem" }}>
-          <div className="field">
-            <label htmlFor="dn">Nazwa</label>
-            <input
-              id="dn"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="em">Email</label>
-            <input
-              id="em"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="pw">Hasło</label>
-            <input
-              id="pw"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              minLength={8}
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="role">Rola</label>
-            <select
-              id="role"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-            >
-              <option value="user">user</option>
-              <option value="admin">admin</option>
-            </select>
-          </div>
-          <button className="btn" type="submit" disabled={saving}>
-            {saving ? "Dodaję…" : "Dodaj dostęp"}
-          </button>
-        </form>
+      <article className="fx-card">
+        <p className="fx-kicker">Wersja Jarvisa</p>
+        <JarvisVersionLines info={jarvis} />
+      </article>
 
-        {ok ? <p className="hint">{ok}</p> : null}
-        {error ? <p className="error">{error}</p> : null}
-
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Nazwa</th>
-              <th>Email</th>
-              <th>Rola</th>
-              <th>Status</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id}>
-                <td>{u.display_name}</td>
-                <td>{u.email}</td>
-                <td>{u.role}</td>
-                <td>{u.is_active ? "aktywny" : "wyłączony"}</td>
-                <td style={{ display: "flex", gap: "0.5rem" }}>
-                  {u.is_active ? (
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      onClick={() => deactivate(u.id)}
-                    >
-                      Wyłącz
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={() => remove(u.id)}
-                  >
-                    Usuń
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <section className="fx-grid fx-grid-4">
+        <Meter
+          label="Procesor"
+          value={host?.cpu_usage_percent ?? 0}
+          detail={host ? `${host.cpu_count} rdzeni` : "Odczyt…"}
+        />
+        <Meter
+          label="Pamięć"
+          value={ramPercent}
+          detail={
+            host
+              ? `${formatBytes(host.memory_used_bytes)} / ${formatBytes(host.memory_total_bytes)}`
+              : "Odczyt…"
+          }
+        />
+        <Meter
+          label="Dysk"
+          value={diskPercent}
+          detail={disk ? disk.mount : "Odczyt…"}
+        />
+        <article className="fx-card">
+          <p className="fx-kicker">Model</p>
+          <p className="fx-stat">{status?.model ?? "—"}</p>
+          <p>
+            {status
+              ? `${status.provider} · ${status.usage.global_daily_used}/${status.limits.global_daily} dziennie`
+              : "Status LLM"}
+          </p>
+        </article>
       </section>
-    </main>
+
+      <section className="fx-grid fx-grid-3">
+        <article className="fx-card">
+          <h3>Konta</h3>
+          <p className="fx-stat">{users.length}</p>
+          <p>{users.filter((user) => user.is_active).length} aktywnych</p>
+        </article>
+        <article className="fx-card">
+          <h3>Urządzenia</h3>
+          <p className="fx-stat">{activeDevices}</p>
+          <p>{devices.length} zapisanych w ekosystemie</p>
+        </article>
+        <article className="fx-card">
+          <h3>Flagi</h3>
+          <p className="fx-stat">{enabledFlags}</p>
+          <p>{flags.length} zdefiniowanych</p>
+        </article>
+      </section>
+    </div>
   );
 }

@@ -23,9 +23,18 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    # Host namespaces so the admin terminal and disk view see the OCI VM,
+    # not only the container. Admin JWT is the gate for /admin/host/exec.
+    pid: host
+    user: "0:0"
+    cap_add:
+      - SYS_ADMIN
     environment:
       PORT: "8080"
       RUST_LOG: ${RUST_LOG:-jarvis_api=info,tower_http=info}
+      JARVIS_HOST_EXEC: host
+    volumes:
+      - /:/host/root:ro
     ports:
       - "8080:8080"
     restart: unless-stopped

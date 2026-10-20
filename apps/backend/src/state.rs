@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use tokio::sync::{Mutex, Semaphore};
 
-use crate::{config::Config, db::DbPool, llm::LlmRuntime};
+use crate::{config::Config, db::DbPool, host::HostMonitor, llm::LlmRuntime};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -11,6 +11,7 @@ pub struct AppState {
     pub llm: Arc<LlmRuntime>,
     pub llm_inflight: Arc<Semaphore>,
     pub login_limiter: Arc<Mutex<LoginLimiter>>,
+    pub host: Arc<HostMonitor>,
 }
 
 /// Simple in-memory login rate limiter (per IP key).

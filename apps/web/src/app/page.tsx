@@ -11,5 +11,5 @@ export default function HomePage() {
     router.replace(getToken() ? "/chat" : "/login");
   }, [router]);
 
-  return null;
+  return <div className="fx-boot">Jarvis</div>;
 }

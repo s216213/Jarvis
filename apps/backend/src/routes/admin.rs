@@ -14,19 +14,11 @@ use crate::{
     state::AppState,
 };
 
-async fn require_admin(auth: &AuthUser) -> AppResult<()> {
-    if auth.is_admin() {
-        Ok(())
-    } else {
-        Err(AppError::Forbidden)
-    }
-}
-
 pub async fn list_users(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> AppResult<Json<Vec<PublicUser>>> {
-    require_admin(&auth).await?;
+    auth.require_admin()?;
     let rows = sqlx::query_as::<_, User>(
         r#"SELECT id, email, password_hash, display_name, role, is_active, created_at
            FROM users ORDER BY created_at ASC"#,
@@ -42,7 +34,7 @@ pub async fn create_user(
     auth: AuthUser,
     Json(body): Json<CreateUserRequest>,
 ) -> AppResult<Json<PublicUser>> {
-    require_admin(&auth).await?;
+    auth.require_admin()?;
 
     let role = body.role.to_lowercase();
     if role != "user" && role != "admin" {
@@ -55,6 +47,7 @@ pub async fn create_user(
             "email and display_name are required".into(),
         ));
     }
+    validate_password(&body.password)?;
 
     let hash = password::hash_password(&body.password)?;
     let id = Uuid::new_v4();
@@ -94,7 +87,24 @@ pub async fn update_user(
     Path(id): Path<Uuid>,
     Json(body): Json<UpdateUserRequest>,
 ) -> AppResult<Json<PublicUser>> {
-    require_admin(&auth).await?;
+    auth.require_admin()?;
+
+    if auth.id == id {
+        if body.is_active == Some(false) {
+            return Err(AppError::BadRequest(
+                "cannot deactivate yourself".into(),
+            ));
+        }
+        if body
+            .role
+            .as_ref()
+            .is_some_and(|role| role.to_lowercase() != "admin")
+        {
+            return Err(AppError::BadRequest(
+                "cannot remove your own admin role".into(),
+            ));
+        }
+    }
 
     let mut user = sqlx::query_as::<_, User>(
         r#"SELECT id, email, password_hash, display_name, role, is_active, created_at
@@ -117,15 +127,27 @@ pub async fn update_user(
         user.role = role;
     }
     if let Some(name) = body.display_name {
+        let name = name.trim().to_string();
+        if name.is_empty() {
+            return Err(AppError::BadRequest("display_name is required".into()));
+        }
         user.display_name = name;
     }
+    if let Some(email) = body.email {
+        let email = email.trim().to_lowercase();
+        if email.is_empty() || !email.contains('@') || email.len() > 200 {
+            return Err(AppError::BadRequest("invalid email".into()));
+        }
+        user.email = email;
+    }
     if let Some(pw) = body.password {
+        validate_password(&pw)?;
         user.password_hash = password::hash_password(&pw)?;
     }
 
     let user = sqlx::query_as::<_, User>(
         r#"UPDATE users
-           SET is_active = $2, role = $3, display_name = $4, password_hash = $5
+           SET is_active = $2, role = $3, display_name = $4, password_hash = $5, email = $6
            WHERE id = $1
            RETURNING id, email, password_hash, display_name, role, is_active, created_at"#,
     )
@@ -134,9 +156,19 @@ pub async fn update_user(
     .bind(&user.role)
     .bind(&user.display_name)
     .bind(&user.password_hash)
+    .bind(&user.email)
     .fetch_one(&state.pool)
     .await
-    .map_err(|e| AppError::internal(format!("update user: {e}")))?;
+    .map_err(|e| {
+        if e.as_database_error()
+            .and_then(|d| d.constraint())
+            .is_some_and(|c| c.contains("email"))
+        {
+            AppError::Conflict("email already exists".into())
+        } else {
+            AppError::internal(format!("update user: {e}"))
+        }
+    })?;
 
     Ok(Json(user.into()))
 }
@@ -146,7 +178,7 @@ pub async fn delete_user(
     auth: AuthUser,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<serde_json::Value>> {
-    require_admin(&auth).await?;
+    auth.require_admin()?;
     if auth.id == id {
         return Err(AppError::BadRequest("cannot delete yourself".into()));
     }
@@ -172,11 +204,21 @@ pub struct LlmModelsResponse {
     models: Vec<crate::llm::provider::ModelInfo>,
 }
 
+fn validate_password(password: &str) -> AppResult<()> {
+    if password.chars().count() < 8 {
+        Err(AppError::BadRequest(
+            "password must be at least 8 characters".into(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 pub async fn llm_models(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> AppResult<Json<LlmModelsResponse>> {
-    require_admin(&auth).await?;
+    auth.require_admin()?;
     let (active, models) = state.llm.status().await?;
     Ok(Json(LlmModelsResponse {
         active: active.model.clone(),
@@ -210,7 +252,7 @@ pub async fn llm_status(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> AppResult<Json<LlmStatusResponse>> {
-    require_admin(&auth).await?;
+    auth.require_admin()?;
     let (active, _) = state.llm.status().await?;
     let usage = limits::snapshot(&state.pool, &state.config, auth.id).await?;
     Ok(Json(LlmStatusResponse {
