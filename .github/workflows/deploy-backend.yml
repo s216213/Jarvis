@@ -39,6 +39,16 @@ jobs:
           target: /tmp/jarvis-upload
           strip_components: 2
 
+      - name: Upload Kokoro image sources to OCI
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          source: deploy/oci/tts
+          target: /tmp/jarvis-upload
+          strip_components: 2
+
       - name: Build and restart on OCI
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -57,13 +67,15 @@ jobs:
               exit 1
             fi
 
-            rm -rf "$DEPLOY_DIR/backend"
+            rm -rf "$DEPLOY_DIR/backend" "$DEPLOY_DIR/tts"
             mv /tmp/jarvis-upload/backend "$DEPLOY_DIR/backend"
             mv /tmp/jarvis-upload/docker-compose.yml "$DEPLOY_DIR/docker-compose.yml"
+            mv /tmp/jarvis-upload/tts "$DEPLOY_DIR/tts"
             rm -rf /tmp/jarvis-upload
 
             cd "$DEPLOY_DIR"
             DOCKER_BUILDKIT=1 docker build -t jarvis-api:latest ./backend
+            DOCKER_BUILDKIT=1 docker compose build jarvis-tts
             docker compose up -d --remove-orphans --force-recreate
             docker image prune -f
 

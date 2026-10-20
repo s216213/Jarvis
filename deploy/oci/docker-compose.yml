@@ -30,17 +30,13 @@ services:
       - jarvis_whisper:/data/whisper
     restart: unless-stopped
 
-  # Kokoro. British male by default. No host port.
-  # linux/amd64 and linux/arm64. An empty API key keeps the internal port open
-  # only to this compose network.
+  # Kokoro on CPU. Built from ./tts so ARM hosts do not pull a CUDA wheel.
+  # No host port. The model cache stays in the volume after the first start.
   jarvis-tts:
-    image: hwdsl2/kokoro-server:latest
+    build:
+      context: ./tts
+    image: jarvis-tts:latest
     container_name: jarvis-tts
-    environment:
-      KOKORO_VOICE: bm_george
-      KOKORO_SPEED: "0.92"
-      KOKORO_LANG_CODE: b
-      KOKORO_API_KEY: ""
     volumes:
       - jarvis_kokoro:/var/lib/kokoro
     restart: unless-stopped
