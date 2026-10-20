@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Jarvis.Desktop.Controls"
+             xmlns:models="using:Jarvis.Desktop.Models"
+             xmlns:vm="using:Jarvis.Desktop.ViewModels"
+             x:Class="Jarvis.Desktop.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+  <controls:GlassCard>
+    <StackPanel Spacing="16" MaxWidth="640" HorizontalAlignment="Left">
+      <StackPanel Spacing="2">
+        <TextBlock Text="SŁUCHANIE" Classes="kicker"/>
+        <TextBlock Text="Ustawienia" Classes="page-title"/>
+      </StackPanel>
+
+      <TextBlock Text="{Binding Blurb}" Classes="muted"/>
+
+      <TextBlock Text="TRYB" Classes="field-label"/>
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <Button Classes="nav" Classes.active="{Binding IsPushMode}" Command="{Binding UsePushCommand}" MinWidth="140">
+          <TextBlock Text="Przycisk"/>
+        </Button>
+        <Button Classes="nav" Classes.active="{Binding IsWakeMode}" Command="{Binding UseWakeCommand}" MinWidth="160">
+          <TextBlock Text="Słowo Jarvis"/>
+        </Button>
+      </StackPanel>
+      <TextBlock Text="{Binding WakeStatus}" Classes="muted"/>
+
+      <TextBlock Text="GŁOS" Classes="field-label"/>
+      <ComboBox ItemsSource="{Binding Voices}"
+                SelectedItem="{Binding SelectedVoice}"
+                MinWidth="280"
+                HorizontalAlignment="Left">
+        <ComboBox.ItemTemplate>
+          <DataTemplate x:DataType="models:VoiceChoice">
+            <TextBlock Text="{Binding Label}"/>
+          </DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+    </StackPanel>
+  </controls:GlassCard>
+</UserControl>

@@ -6,6 +6,7 @@ use crate::{
     config::Config,
     db::DbPool,
     error::{AppError, AppResult},
+    llm::RoutePreference,
 };
 
 pub async fn ensure_admin(pool: &DbPool, config: &Config) -> AppResult<()> {
@@ -61,6 +62,11 @@ pub async fn ensure_flags(pool: &DbPool) -> AppResult<()> {
             true,
             "Nowe urządzenia klientów (web, android, desktop). Wyłączenie zostawia już znane urządzenia.",
         ),
+        (
+            "voice_enabled",
+            true,
+            "Tryb głosowy na desktopie. Wyłączenie blokuje POST /chat/voice.",
+        ),
     ];
 
     for (key, enabled, description) in defaults {
@@ -78,5 +84,47 @@ pub async fn ensure_flags(pool: &DbPool) -> AppResult<()> {
         .map_err(|e| AppError::internal(format!("seed flag {key}: {e}")))?;
     }
 
+    Ok(())
+}
+
+pub async fn load_llm_route(pool: &DbPool, env_model: Option<&str>) -> AppResult<RoutePreference> {
+    let existing = sqlx::query_as::<_, (String, String)>(
+        "SELECT provider, model FROM llm_route WHERE id = 1",
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| AppError::internal(format!("load llm route: {e}")))?;
+
+    if let Some((provider, model)) = existing {
+        return Ok(RoutePreference { provider, model });
+    }
+
+    let model = env_model
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("auto");
+    let preference = RoutePreference {
+        provider: "auto".into(),
+        model: model.to_string(),
+    };
+    save_llm_route(pool, &preference).await?;
+    Ok(preference)
+}
+
+pub async fn save_llm_route(pool: &DbPool, preference: &RoutePreference) -> AppResult<()> {
+    sqlx::query(
+        r#"INSERT INTO llm_route (id, provider, model, updated_at)
+           VALUES (1, $1, $2, $3)
+           ON CONFLICT (id) DO UPDATE
+           SET provider = excluded.provider,
+               model = excluded.model,
+               updated_at = excluded.updated_at"#,
+    )
+    .bind(&preference.provider)
+    .bind(&preference.model)
+    .bind(Utc::now())
+    .execute(pool)
+    .await
+    .map_err(|e| AppError::internal(format!("save llm route: {e}")))?;
     Ok(())
 }

@@ -18,6 +18,7 @@ public sealed class ChatMessage
     public string Content { get; set; } = "";
     public DateTimeOffset CreatedAt { get; set; }
     public bool IsAssistant => Role == "assistant";
+    public bool IsUser => !IsAssistant;
     public string Who => IsAssistant ? "JARVIS" : "TY";
 }
 
@@ -26,6 +27,16 @@ public sealed class SendMessageResponse
     public ChatMessage UserMessage { get; set; } = new();
     public ChatMessage AssistantMessage { get; set; } = new();
     public string Model { get; set; } = "";
+}
+
+public sealed class VoiceResponse
+{
+    public ChatMessage UserMessage { get; set; } = new();
+    public ChatMessage AssistantMessage { get; set; } = new();
+    public string Model { get; set; } = "";
+    public string? AudioBase64 { get; set; }
+    public string? AudioMime { get; set; }
+    public string? SpeechError { get; set; }
 }
 
 public sealed class UsageSnapshot

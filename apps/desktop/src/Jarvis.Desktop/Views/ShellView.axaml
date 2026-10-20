@@ -34,20 +34,17 @@
           </Button>
         </StackPanel>
 
-        <Border Classes="nav-active">
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <Path Width="18"
-                  Height="18"
-                  Stretch="Uniform"
-                  Stroke="#E7F0FF"
-                  StrokeThickness="1.6"
-                  StrokeLineCap="Round"
-                  StrokeJoin="Round"
-                  Fill="Transparent"
-                  Data="M6,6.5 H18 V14.5 H9 L6,17.5 V6.5 Z"/>
-            <TextBlock Text="Czat" VerticalAlignment="Center"/>
-          </StackPanel>
-        </Border>
+        <StackPanel Spacing="6">
+          <Button Classes="nav" Classes.active="{Binding IsChat}" Command="{Binding ShowChatCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+            <TextBlock Text="Czat"/>
+          </Button>
+          <Button Classes="nav" Classes.active="{Binding IsVoice}" Command="{Binding ShowVoiceCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+            <TextBlock Text="Głos"/>
+          </Button>
+          <Button Classes="nav" Classes.active="{Binding IsSettings}" Command="{Binding ShowSettingsCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+            <TextBlock Text="Ustawienia"/>
+          </Button>
+        </StackPanel>
       </DockPanel>
     </Border>
 
@@ -82,7 +79,17 @@
         </StackPanel>
       </Grid>
 
-      <views:ChatView Grid.Row="1" DataContext="{Binding Chat}" Margin="0,18,0,0"/>
+      <Panel Grid.Row="1" Margin="0,18,0,0">
+        <Panel IsVisible="{Binding IsChat}">
+          <views:ChatView DataContext="{Binding Chat}"/>
+        </Panel>
+        <Panel IsVisible="{Binding IsVoice}">
+          <views:VoiceView DataContext="{Binding Voice}"/>
+        </Panel>
+        <Panel IsVisible="{Binding IsSettings}">
+          <views:SettingsView DataContext="{Binding SettingsPage}"/>
+        </Panel>
+      </Panel>
     </Grid>
   </Grid>
 </UserControl>

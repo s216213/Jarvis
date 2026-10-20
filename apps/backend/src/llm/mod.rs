@@ -1,7 +1,8 @@
 //! Free-tier pool. Jarvis picks one model per turn from every configured provider.
 //! The choice follows the task, each model's free-tier quota, prompt size, and
 //! cooldowns learned from provider errors. A failed call falls through to the
-//! next best fit. `LLM_MODEL` pins a single id and turns task routing off.
+//! next best fit. The admin route `auto : auto` keeps that choice. Any other
+//! provider or model forces the pool. `LLM_MODEL` only seeds the first saved route.
 
 pub mod gemini;
 pub mod groq;
@@ -31,7 +32,27 @@ const MAX_MODELS_PER_PROVIDER: usize = 8;
 pub struct ActiveModel {
     pub provider: String,
     pub model: String,
-    pub source: String, // routed | auto | pinned
+    pub source: String, // routed | auto | forced
+}
+
+/// Admin choice. `auto` / `auto` leaves task routing on.
+#[derive(Clone, Debug, Serialize)]
+pub struct RoutePreference {
+    pub provider: String,
+    pub model: String,
+}
+
+impl RoutePreference {
+    pub fn automatic() -> Self {
+        Self {
+            provider: "auto".into(),
+            model: "auto".into(),
+        }
+    }
+
+    pub fn is_automatic(&self) -> bool {
+        self.provider == "auto" && self.model == "auto"
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -39,13 +60,17 @@ pub struct PoolStatus {
     pub provider: String,
     pub model: String,
     pub source: String,
+    pub route_provider: String,
+    pub route_model: String,
+    pub route_note: String,
+    pub providers: Vec<String>,
     pub slots: Vec<ActiveModel>,
     pub models: Vec<ModelInfo>,
 }
 
 pub struct LlmRuntime {
     providers: Vec<Arc<dyn LlmProvider>>,
-    pinned: Option<String>,
+    preference: RwLock<RoutePreference>,
     cache: RwLock<PoolCache>,
     health: RwLock<HashMap<String, SlotHealth>>,
 }
@@ -107,11 +132,12 @@ struct PoolCache {
     provider_summary: String,
     model_summary: String,
     source: String,
+    route_note: String,
     fetched_at: Option<Instant>,
 }
 
 impl LlmRuntime {
-    pub async fn from_config(config: &Config) -> AppResult<Self> {
+    pub async fn from_config(config: &Config, preference: RoutePreference) -> AppResult<Self> {
         let mut providers: Vec<Arc<dyn LlmProvider>> = Vec::new();
         for name in &config.llm_providers {
             let provider: Arc<dyn LlmProvider> = match name.as_str() {
@@ -148,13 +174,14 @@ impl LlmRuntime {
 
         let runtime = Self {
             providers,
-            pinned: config.llm_model.clone(),
+            preference: RwLock::new(preference),
             cache: RwLock::new(PoolCache {
                 slots: Vec::new(),
                 models: Vec::new(),
                 provider_summary: String::new(),
                 model_summary: String::new(),
                 source: "auto".into(),
+                route_note: String::new(),
                 fetched_at: None,
             }),
             health: RwLock::new(HashMap::new()),
@@ -181,12 +208,7 @@ impl LlmRuntime {
                             model
                         })
                         .collect();
-                    if let Some(pin) = &self.pinned {
-                        chat.retain(|model| model.id == *pin);
-                    } else {
-                        chat.sort_by(|a, b| model_rank(&b.id).cmp(&model_rank(&a.id)));
-                        chat.truncate(MAX_MODELS_PER_PROVIDER);
-                    }
+                    chat.sort_by(|a, b| model_rank(&b.id).cmp(&model_rank(&a.id)));
                     if chat.is_empty() {
                         errors.push(format!("{}: no chat models", provider.name()));
                         continue;
@@ -215,9 +237,39 @@ impl LlmRuntime {
             )));
         }
 
-        let slots = interleave(groups);
-        let source = if self.pinned.is_some() {
-            "pinned"
+        let preference = self.preference.read().await.clone();
+        let provider_names: Vec<&str> = self.providers.iter().map(|provider| provider.name()).collect();
+        let (slots, route_note) = match choose_slots(&groups, &provider_names, &preference) {
+            Ok(slots) if !slots.is_empty() => (slots, String::new()),
+            _ => {
+                let capped = groups
+                    .iter()
+                    .map(|group| {
+                        let mut copy = group.clone();
+                        copy.truncate(MAX_MODELS_PER_PROVIDER);
+                        copy
+                    })
+                    .collect();
+                (
+                    interleave(capped),
+                    format!(
+                        "route {} : {} is not available",
+                        preference.provider, preference.model
+                    ),
+                )
+            }
+        };
+        if slots.is_empty() {
+            return Err(AppError::Upstream(format!(
+                "no chat models available ({})",
+                errors.join("; ")
+            )));
+        }
+
+        let source = if !route_note.is_empty() {
+            if slots.len() > 1 { "routed" } else { "auto" }
+        } else if !preference.is_automatic() {
+            "forced"
         } else if slots.len() > 1 {
             "routed"
         } else {
@@ -230,18 +282,46 @@ impl LlmRuntime {
             providers = %provider_summary,
             models = slots.len(),
             source,
+            route = %format!("{} : {}", preference.provider, preference.model),
             "LLM pool resolved"
         );
 
-        let status = self.view_from(&slots, &models, &provider_summary, &model_summary, source);
+        let status = self.view_from(
+            &slots,
+            &models,
+            &provider_summary,
+            &model_summary,
+            source,
+            &preference,
+            &route_note,
+        );
         let mut cache = self.cache.write().await;
         cache.slots = slots;
         cache.models = models;
         cache.provider_summary = provider_summary;
         cache.model_summary = model_summary;
         cache.source = source.into();
+        cache.route_note = route_note;
         cache.fetched_at = Some(Instant::now());
         Ok(status)
+    }
+
+    pub async fn apply_preference(&self, next: RoutePreference) -> AppResult<PoolStatus> {
+        let previous = self.preference.read().await.clone();
+        *self.preference.write().await = next;
+        match self.refresh().await {
+            Ok(status) if status.route_note.is_empty() => Ok(status),
+            Ok(status) => {
+                *self.preference.write().await = previous;
+                self.refresh().await?;
+                Err(AppError::BadRequest(status.route_note))
+            }
+            Err(err) => {
+                *self.preference.write().await = previous;
+                let _ = self.refresh().await;
+                Err(err)
+            }
+        }
     }
 
     async fn ensure_fresh(&self) -> AppResult<()> {
@@ -266,6 +346,7 @@ impl LlmRuntime {
 
     pub async fn status(&self) -> AppResult<PoolStatus> {
         self.ensure_fresh().await?;
+        let preference = self.preference.read().await.clone();
         let cache = self.cache.read().await;
         Ok(self.view_from(
             &cache.slots,
@@ -273,6 +354,8 @@ impl LlmRuntime {
             &cache.provider_summary,
             &cache.model_summary,
             &cache.source,
+            &preference,
+            &cache.route_note,
         ))
     }
 
@@ -379,6 +462,8 @@ impl LlmRuntime {
         provider_summary: &str,
         model_summary: &str,
         source: &str,
+        preference: &RoutePreference,
+        route_note: &str,
     ) -> PoolStatus {
         let active_slots = slots
             .iter()
@@ -392,10 +477,60 @@ impl LlmRuntime {
             provider: provider_summary.into(),
             model: model_summary.into(),
             source: source.into(),
+            route_provider: preference.provider.clone(),
+            route_model: preference.model.clone(),
+            route_note: route_note.into(),
+            providers: self.providers.iter().map(|provider| provider.name().into()).collect(),
             slots: active_slots,
             models: models.to_vec(),
         }
     }
+}
+
+fn choose_slots(
+    groups: &[Vec<Slot>],
+    provider_names: &[&str],
+    preference: &RoutePreference,
+) -> Result<Vec<Slot>, ()> {
+    if preference.model != "auto" {
+        let mut found = Vec::new();
+        for (index, group) in groups.iter().enumerate() {
+            if preference.provider != "auto" && provider_names[index] != preference.provider {
+                continue;
+            }
+            for slot in group {
+                if slot.model == preference.model {
+                    found.push(slot.clone());
+                }
+            }
+        }
+        return if found.is_empty() { Err(()) } else { Ok(found) };
+    }
+
+    if preference.provider != "auto" {
+        let Some(index) = provider_names.iter().position(|name| *name == preference.provider) else {
+            return Err(());
+        };
+        let Some(group) = groups.get(index) else {
+            return Err(());
+        };
+        if group.is_empty() {
+            return Err(());
+        }
+        let mut chosen = group.clone();
+        chosen.truncate(MAX_MODELS_PER_PROVIDER);
+        return Ok(chosen);
+    }
+
+    let capped = groups
+        .iter()
+        .map(|group| {
+            let mut copy = group.clone();
+            copy.truncate(MAX_MODELS_PER_PROVIDER);
+            copy
+        })
+        .collect();
+    Ok(interleave(capped))
 }
 
 fn provider_summary(slots: &[Slot], providers: &[Arc<dyn LlmProvider>]) -> String {
@@ -446,7 +581,7 @@ fn interleave(groups: Vec<Vec<Slot>>) -> Vec<Slot> {
 
 #[cfg(test)]
 mod tests {
-    use super::{interleave, plural_modele, Slot};
+    use super::{choose_slots, interleave, plural_modele, RoutePreference, Slot};
 
     fn slot(provider_index: usize, model: &str) -> Slot {
         Slot {
@@ -466,6 +601,57 @@ mod tests {
             ids,
             ["gemini-a", "groq-a", "gemini-b", "groq-b", "groq-c"]
         );
+    }
+
+    #[test]
+    fn automatic_route_keeps_the_pool() {
+        let groups = vec![
+            vec![slot(0, "gemini-a"), slot(0, "gemini-b")],
+            vec![slot(1, "groq-a")],
+        ];
+        let chosen = choose_slots(&groups, &["gemini", "groq"], &RoutePreference::automatic()).unwrap();
+        let ids: Vec<_> = chosen.iter().map(|item| item.model.as_str()).collect();
+        assert_eq!(ids, ["gemini-a", "groq-a", "gemini-b"]);
+    }
+
+    #[test]
+    fn forced_provider_drops_the_other_one() {
+        let groups = vec![
+            vec![slot(0, "gemini-a")],
+            vec![slot(1, "groq-a"), slot(1, "groq-b")],
+        ];
+        let preference = RoutePreference {
+            provider: "groq".into(),
+            model: "auto".into(),
+        };
+        let chosen = choose_slots(&groups, &["gemini", "groq"], &preference).unwrap();
+        let ids: Vec<_> = chosen.iter().map(|item| item.model.as_str()).collect();
+        assert_eq!(ids, ["groq-a", "groq-b"]);
+    }
+
+    #[test]
+    fn forced_model_is_a_single_slot() {
+        let groups = vec![
+            vec![slot(0, "gemini-a"), slot(0, "gemini-b")],
+            vec![slot(1, "groq-a")],
+        ];
+        let preference = RoutePreference {
+            provider: "gemini".into(),
+            model: "gemini-b".into(),
+        };
+        let chosen = choose_slots(&groups, &["gemini", "groq"], &preference).unwrap();
+        assert_eq!(chosen.len(), 1);
+        assert_eq!(chosen[0].model, "gemini-b");
+    }
+
+    #[test]
+    fn unknown_force_is_rejected() {
+        let groups = vec![vec![slot(0, "gemini-a")]];
+        let preference = RoutePreference {
+            provider: "auto".into(),
+            model: "missing".into(),
+        };
+        assert!(choose_slots(&groups, &["gemini"], &preference).is_err());
     }
 
     #[test]

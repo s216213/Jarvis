@@ -3,13 +3,14 @@ use axum::{
     extract::{Path, State},
 };
 use chrono::Utc;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
     auth::{middleware::AuthUser, password},
+    bootstrap,
     error::{AppError, AppResult},
-    llm::limits,
+    llm::{limits, RoutePreference},
     models::user::{CreateUserRequest, PublicUser, UpdateUserRequest, User},
     state::AppState,
 };
@@ -201,6 +202,10 @@ pub struct LlmModelsResponse {
     active: String,
     source: String,
     provider: String,
+    route_provider: String,
+    route_model: String,
+    route_note: String,
+    providers: Vec<String>,
     pool: Vec<crate::llm::ActiveModel>,
     models: Vec<crate::llm::provider::ModelInfo>,
 }
@@ -225,9 +230,61 @@ pub async fn llm_models(
         active: status.model.clone(),
         source: status.source.clone(),
         provider: status.provider,
+        route_provider: status.route_provider,
+        route_model: status.route_model,
+        route_note: status.route_note,
+        providers: status.providers,
         pool: status.slots,
         models: status.models,
     }))
+}
+
+#[derive(Deserialize)]
+pub struct SetLlmRouteRequest {
+    provider: String,
+    model: String,
+}
+
+pub async fn set_llm_route(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<SetLlmRouteRequest>,
+) -> AppResult<Json<LlmStatusResponse>> {
+    auth.require_admin()?;
+    let preference = normalize_route(&body.provider, &body.model)?;
+    let previous = bootstrap::load_llm_route(&state.pool, None).await?;
+    bootstrap::save_llm_route(&state.pool, &preference).await?;
+    let status = match state.llm.apply_preference(preference).await {
+        Ok(status) => status,
+        Err(err) => {
+            bootstrap::save_llm_route(&state.pool, &previous).await?;
+            return Err(err);
+        }
+    };
+    Ok(Json(llm_status_body(&state, auth.id, status).await?))
+}
+
+fn normalize_route(provider: &str, model: &str) -> AppResult<RoutePreference> {
+    let provider = provider.trim().to_ascii_lowercase();
+    let model = model.trim();
+    let model = if model.eq_ignore_ascii_case("auto") {
+        "auto".to_string()
+    } else {
+        model.to_string()
+    };
+    if provider.is_empty()
+        || model.is_empty()
+        || (provider != "auto" && !provider.chars().all(|c| c.is_ascii_alphanumeric()))
+        || model.chars().count() > 120
+        || !model.chars().all(|c| {
+            c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '/' | ':')
+        })
+    {
+        return Err(AppError::BadRequest(
+            "provider and model must be auto or a listed id".into(),
+        ));
+    }
+    Ok(RoutePreference { provider, model })
 }
 
 #[derive(Serialize)]
@@ -235,7 +292,12 @@ pub struct LlmStatusResponse {
     provider: String,
     model: String,
     source: String,
+    route_provider: String,
+    route_model: String,
+    route_note: String,
+    providers: Vec<String>,
     pool: Vec<crate::llm::ActiveModel>,
+    models: Vec<crate::llm::provider::ModelInfo>,
     usage: limits::UsageSnapshot,
     limits: LimitConfigView,
 }
@@ -257,12 +319,25 @@ pub async fn llm_status(
 ) -> AppResult<Json<LlmStatusResponse>> {
     auth.require_admin()?;
     let status = state.llm.status().await?;
-    let usage = limits::snapshot(&state.pool, &state.config, auth.id).await?;
-    Ok(Json(LlmStatusResponse {
+    Ok(Json(llm_status_body(&state, auth.id, status).await?))
+}
+
+async fn llm_status_body(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    status: crate::llm::PoolStatus,
+) -> AppResult<LlmStatusResponse> {
+    let usage = limits::snapshot(&state.pool, &state.config, user_id).await?;
+    Ok(LlmStatusResponse {
         provider: status.provider,
         model: status.model,
         source: status.source,
+        route_provider: status.route_provider,
+        route_model: status.route_model,
+        route_note: status.route_note,
+        providers: status.providers,
         pool: status.slots,
+        models: status.models,
         usage,
         limits: LimitConfigView {
             user_rpm: state.config.llm_user_rpm,
@@ -273,5 +348,5 @@ pub async fn llm_status(
             context_messages: state.config.llm_context_messages,
             max_inflight: state.config.llm_max_inflight,
         },
-    }))
+    })
 }

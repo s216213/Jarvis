@@ -49,6 +49,28 @@ public sealed class ApiException : Exception
         return string.IsNullOrWhiteSpace(Message) ? "Wysyłanie nieudane." : Message;
     }
 
+    public string ForVoice()
+    {
+        if (IsRateLimited)
+            return ForChat();
+        var text = Message ?? "";
+        if (text.Contains("voice engine is not configured", StringComparison.OrdinalIgnoreCase))
+            return "Silnik głosu na serwerze nie jest skonfigurowany.";
+        if (text.Contains("no speech recognized", StringComparison.OrdinalIgnoreCase))
+            return "Nie rozpoznano mowy.";
+        if (text.Contains("speech service unavailable", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("speech synthesis unavailable", StringComparison.OrdinalIgnoreCase))
+            return "Silnik głosu nie odpowiada.";
+        if (text.Contains("voice is disabled", StringComparison.OrdinalIgnoreCase))
+            return "Tryb głosowy jest wyłączony.";
+        if (text.Contains("audio must be", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("audio exceeds", StringComparison.OrdinalIgnoreCase))
+            return "Nagranie musi być krótkie, 16 kHz, mono.";
+        if (text.Contains("unknown voice", StringComparison.OrdinalIgnoreCase))
+            return "Wybrany głos nie jest dostępny.";
+        return ForChat();
+    }
+
     private static string Describe(int status, ApiErrorBody? body)
     {
         if (!string.IsNullOrWhiteSpace(body?.Message))
@@ -72,7 +94,7 @@ public sealed class ApiClient
         PooledConnectionLifetime = TimeSpan.FromMinutes(2),
     })
     {
-        Timeout = TimeSpan.FromSeconds(120),
+        Timeout = TimeSpan.FromMinutes(3),
         // HTTPS defaults to HTTP/2. A long Gemini reply was saved by the API, but HttpClient
         // never finished reading that stream, so the chat stayed on "thinking" until restart.
         DefaultRequestVersion = HttpVersion.Version11,
@@ -134,25 +156,50 @@ public sealed class ApiClient
     public Task<SendMessageResponse> SendMessageAsync(string token, string content, CancellationToken ct = default) =>
         SendAsync<SendMessageResponse>(HttpMethod.Post, "/chat/messages", token, new SendRequest(content), ct);
 
+    public Task<VoiceResponse> SendVoiceAsync(string token, byte[] wav, string voice, CancellationToken ct = default)
+    {
+        var audio = new ByteArrayContent(wav);
+        audio.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
+        var form = new MultipartFormDataContent
+        {
+            { audio, "audio", "speech.wav" },
+            { new StringContent(voice), "voice" },
+        };
+        return SendContentAsync<VoiceResponse>(HttpMethod.Post, "/chat/voice", token, form, ct);
+    }
+
     public Task<List<FeatureFlag>> GetFlagsAsync(string token, CancellationToken ct = default) =>
         SendAsync<List<FeatureFlag>>(HttpMethod.Get, "/flags", token, null, ct);
 
     public Task RegisterDeviceAsync(string token, DeviceHeartbeat body, CancellationToken ct = default) =>
         SendAsync<JsonElement>(HttpMethod.Post, "/me/devices", token, body, ct);
 
-    private async Task<T> SendAsync<T>(HttpMethod method, string path, string? token, object? body, CancellationToken ct)
+    private Task<T> SendAsync<T>(HttpMethod method, string path, string? token, object? body, CancellationToken ct)
+    {
+        HttpContent? content = null;
+        if (body is not null)
+        {
+            content = new StringContent(
+                JsonSerializer.Serialize(body, Json),
+                Encoding.UTF8,
+                "application/json");
+        }
+
+        return SendContentAsync<T>(method, path, token, content, ct);
+    }
+
+    private async Task<T> SendContentAsync<T>(
+        HttpMethod method,
+        string path,
+        string? token,
+        HttpContent? content,
+        CancellationToken ct)
     {
         using var request = new HttpRequestMessage(method, BaseUrl.TrimEnd('/') + path);
         request.Headers.Accept.ParseAdd("application/json");
         if (!string.IsNullOrEmpty(token))
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        if (body is not null)
-        {
-            request.Content = new StringContent(
-                JsonSerializer.Serialize(body, Json),
-                Encoding.UTF8,
-                "application/json");
-        }
+        request.Content = content;
 
         HttpResponseMessage response;
         try

@@ -1,8 +1,7 @@
 use argon2::{
     Argon2,
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    password_hash::{PasswordHasher, PasswordVerifier, phc::PasswordHash},
 };
-use rand::rngs::OsRng;
 
 use crate::error::{AppError, AppResult};
 
@@ -12,10 +11,9 @@ pub fn hash_password(password: &str) -> AppResult<String> {
             "password must be at least 8 characters".into(),
         ));
     }
-    let salt = SaltString::generate(&mut OsRng);
     Argon2::default()
-        .hash_password(password.as_bytes(), &salt)
-        .map(|h| h.to_string())
+        .hash_password(password.as_bytes())
+        .map(|hash| hash.to_string())
         .map_err(|e| AppError::internal(format!("hash: {e}")))
 }
 

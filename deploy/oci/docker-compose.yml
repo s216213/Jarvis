@@ -15,12 +15,46 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # Faster-Whisper. No host port: only jarvis-api on this network can reach it.
+  # linux/amd64 and linux/arm64. Model files stay in the volume after the first download.
+  jarvis-stt:
+    image: onerahmet/openai-whisper-asr-webservice:v1.10.0
+    container_name: jarvis-stt
+    environment:
+      ASR_ENGINE: faster_whisper
+      ASR_MODEL: small
+      ASR_DEVICE: cpu
+      ASR_QUANTIZATION: int8
+      ASR_MODEL_PATH: /data/whisper
+    volumes:
+      - jarvis_whisper:/data/whisper
+    restart: unless-stopped
+
+  # Kokoro. British male by default. No host port.
+  # linux/amd64 and linux/arm64. An empty API key keeps the internal port open
+  # only to this compose network.
+  jarvis-tts:
+    image: hwdsl2/kokoro-server:latest
+    container_name: jarvis-tts
+    environment:
+      KOKORO_VOICE: bm_george
+      KOKORO_SPEED: "0.92"
+      KOKORO_LANG_CODE: b
+      KOKORO_API_KEY: ""
+    volumes:
+      - jarvis_kokoro:/var/lib/kokoro
+    restart: unless-stopped
+
   jarvis-api:
     image: jarvis-api:latest
     container_name: jarvis-api
     depends_on:
       postgres:
         condition: service_healthy
+      jarvis-stt:
+        condition: service_started
+      jarvis-tts:
+        condition: service_started
     env_file:
       - .env
     # Host namespaces so the admin terminal and disk view see the OCI VM,
@@ -38,6 +72,8 @@ services:
       PORT: "8080"
       RUST_LOG: ${RUST_LOG:-jarvis_api=info,tower_http=info}
       JARVIS_HOST_EXEC: host
+      SPEECH_STT_URL: http://jarvis-stt:9000
+      SPEECH_TTS_URL: http://jarvis-tts:8880
     volumes:
       - /:/host/root:ro
     ports:
@@ -46,3 +82,5 @@ services:
 
 volumes:
   jarvis_pg_data:
+  jarvis_whisper:
+  jarvis_kokoro:

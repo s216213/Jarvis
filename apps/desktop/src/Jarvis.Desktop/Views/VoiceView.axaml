@@ -1,0 +1,38 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Jarvis.Desktop.Controls"
+             xmlns:vm="using:Jarvis.Desktop.ViewModels"
+             x:Class="Jarvis.Desktop.Views.VoiceView"
+             x:DataType="vm:VoiceViewModel">
+  <Grid RowDefinitions="*,Auto">
+    <Grid>
+      <controls:HudCore Width="460"
+                        Height="460"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Level="{Binding Level}"
+                        Phase="{Binding Phase}"/>
+    </Grid>
+
+    <StackPanel Grid.Row="1" Spacing="10" MaxWidth="720" HorizontalAlignment="Center" Margin="0,8,0,0">
+      <TextBlock Text="{Binding StatusLabel}" Classes="kicker" HorizontalAlignment="Center"/>
+      <TextBlock Text="{Binding Heard}"
+                 Classes="muted"
+                 TextAlignment="Center"
+                 IsVisible="{Binding HasHeard}"/>
+      <TextBlock Text="{Binding Reply}"
+                 Classes="voice-line"
+                 IsVisible="{Binding HasReply}"/>
+      <TextBlock Text="{Binding Notice}" Classes="muted" TextAlignment="Center" IsVisible="{Binding HasNotice}"/>
+      <TextBlock Text="{Binding Error}" Classes="alert" TextAlignment="Center" IsVisible="{Binding HasError}"/>
+      <Button x:Name="MicButton"
+              Classes="fx"
+              Content="{Binding MicLabel}"
+              IsEnabled="{Binding MicEnabled}"
+              MinWidth="160"
+              HorizontalAlignment="Center"
+              PointerPressed="OnMicPressed"
+              PointerReleased="OnMicReleased"/>
+    </StackPanel>
+  </Grid>
+</UserControl>

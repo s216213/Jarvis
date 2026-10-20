@@ -360,6 +360,7 @@ textarea {
   font-size: 1.8rem;
   letter-spacing: -0.03em;
   margin: 0.35rem 0 0;
+  overflow-wrap: anywhere;
 }
 
 .fx-pill,
@@ -377,6 +378,7 @@ textarea {
 }
 
 .fx-badge.ok,
+.fx-pill.ok,
 .fx-dot.ok {
   color: var(--fx-ok);
   border-color: rgba(61, 255, 192, 0.35);
@@ -398,6 +400,11 @@ textarea {
   border-radius: 50%;
   background: var(--fx-ok);
   box-shadow: 0 0 10px var(--fx-ok);
+}
+
+.fx-dot.idle {
+  background: var(--fx-muted);
+  box-shadow: none;
 }
 
 .fx-btn {
@@ -592,17 +599,185 @@ th {
   line-height: 1.55;
 }
 
-.fx-term {
+.fx-md {
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.fx-md :where(p, ul, ol, pre, blockquote, table, h1, h2, h3, h4, hr) {
+  margin: 0.45rem 0;
+}
+
+.fx-md > :first-child {
+  margin-top: 0;
+}
+
+.fx-md > :last-child {
+  margin-bottom: 0;
+}
+
+.fx-md h1,
+.fx-md h2,
+.fx-md h3,
+.fx-md h4 {
+  font-family: var(--font-display), sans-serif;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+}
+
+.fx-md h1 {
+  font-size: 1.15rem;
+}
+
+.fx-md h2 {
+  font-size: 1.05rem;
+}
+
+.fx-md h3,
+.fx-md h4 {
+  font-size: 0.98rem;
+  color: var(--fx-cyan);
+}
+
+.fx-md a {
+  color: var(--fx-cyan);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.fx-md ul,
+.fx-md ol {
+  padding-left: 1.2rem;
+}
+
+.fx-md li + li {
+  margin-top: 0.2rem;
+}
+
+.fx-md code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.86em;
+  background: rgba(62, 224, 255, 0.08);
+  border: 1px solid rgba(62, 224, 255, 0.16);
+  border-radius: 6px;
+  padding: 0.05em 0.35em;
+}
+
+.fx-md pre {
   background: #070b14;
-  border-radius: 16px;
   border: 1px solid rgba(62, 224, 255, 0.2);
-  height: min(70vh, 720px);
-  min-height: 320px;
+  border-radius: 12px;
+  padding: 0.75rem 0.85rem;
+  overflow: auto;
+}
+
+.fx-md pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 0.82rem;
+  white-space: pre;
+}
+
+.fx-md blockquote {
+  margin-left: 0;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--fx-violet);
+  color: var(--fx-muted);
+}
+
+.fx-md table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.fx-md th,
+.fx-md td {
+  border: 1px solid var(--fx-line);
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.fx-md th {
+  color: var(--fx-cyan);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  background: rgba(62, 224, 255, 0.06);
+}
+
+.fx-md hr {
+  border: 0;
+  border-top: 1px solid var(--fx-line);
+}
+
+.fx-md img {
+  max-width: 100%;
+  border-radius: 12px;
+}
+
+.fx-term {
+  background: #05080f;
+  border-radius: 16px;
+  border: 1px solid rgba(62, 224, 255, 0.22);
+  height: calc(100vh - 13.5rem);
+  min-height: 360px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   font-family: var(--font-mono), ui-monospace, monospace;
-  box-shadow: 0 0 40px rgba(62, 224, 255, 0.06);
+  box-shadow:
+    0 0 0 1px rgba(139, 124, 255, 0.08),
+    0 24px 60px rgba(0, 0, 0, 0.35);
+  cursor: text;
+}
+
+.fx-term-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.8rem;
+  background: rgba(8, 14, 28, 0.95);
+  border-bottom: 1px solid rgba(62, 224, 255, 0.14);
+}
+
+.fx-term-dots {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.fx-term-dots i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: block;
+}
+
+.fx-term-dots i:nth-child(1) {
+  background: var(--fx-danger);
+}
+
+.fx-term-dots i:nth-child(2) {
+  background: var(--fx-warn);
+}
+
+.fx-term-dots i:nth-child(3) {
+  background: var(--fx-ok);
+}
+
+.fx-term-title {
+  color: var(--fx-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fx-term-title:last-child {
+  margin-left: auto;
 }
 
 .fx-term-log {
@@ -653,15 +828,14 @@ th {
   color: var(--fx-muted);
 }
 
-.fx-term form {
+.fx-term-line {
   display: flex;
+  align-items: baseline;
   gap: 0.55rem;
-  align-items: center;
-  padding: 0.75rem;
-  border-top: 1px solid var(--fx-line);
+  margin-top: 0.15rem;
 }
 
-.fx-term form span {
+.fx-term-prompt {
   color: var(--fx-ok);
   white-space: nowrap;
 }
@@ -672,8 +846,17 @@ th {
   min-width: 0;
   border: 0;
   background: transparent;
-  padding: 0.35rem 0;
+  padding: 0;
   border-radius: 0;
+  color: var(--fx-ink);
+  caret-color: var(--fx-cyan);
+  caret-shape: block;
+  font: inherit;
+  line-height: inherit;
+}
+
+.fx-term input:focus {
+  outline: none;
 }
 
 code {

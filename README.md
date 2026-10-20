@@ -98,7 +98,7 @@ Package manager is pinned via `packageManager` in `apps/web/package.json` (pnpm)
 
 ### Desktop (Avalonia)
 
-Chat client only. Admin tools stay in the web app.
+Chat, voice HUD, and listen settings. Admin tools stay in the web app. Voice turns call `POST /chat/voice`. On OCI that endpoint uses the Faster-Whisper and Kokoro containers from `deploy/oci/docker-compose.yml` (no host ports). Kokoro speaks English (`bm_george` by default); the user may speak Polish. A local `cargo run` without `SPEECH_STT_URL` and `SPEECH_TTS_URL` keeps text chat and refuses voice.
 
 ```bash
 cd apps/desktop
@@ -113,7 +113,7 @@ Jarvis keeps a pool of free-tier models and chooses one per turn. Task shape (sh
 
 1. **Now:** Gemini and Groq free tiers, routed pool (`GEMINI_API_KEY`, `GROQ_API_KEY`; optional `LLM_PROVIDERS`)
 2. Later: OpenRouter free tier
-3. Later: admin UI model picker (`GET /admin/llm/models` already lists the pool)
+3. Admin route override: `PATCH /admin/llm/route` with `provider` and `model`. `auto : auto` keeps the router.
 
 ### API sketch
 
@@ -122,9 +122,11 @@ Jarvis keeps a pool of free-tier models and chooses one per turn. Task shape (sh
 | POST | `/auth/login` | public |
 | GET | `/me`, `/me/usage` | JWT |
 | GET/POST | `/chat/messages` | JWT |
+| POST | `/chat/voice` | JWT — WAV in, transcript plus Kokoro audio out |
 | GET/POST | `/admin/users` | admin |
 | PATCH/DELETE | `/admin/users/:id` | admin |
 | GET | `/admin/llm/status`, `/admin/llm/models` | admin |
+| PATCH | `/admin/llm/route` | admin — force `provider` and `model`, or `auto` / `auto` |
 | GET | `/admin/host/metrics` | admin — OCI VM snapshot (poll every 5s) |
 | POST | `/admin/host/exec` | admin — shell on the API host |
 | POST | `/me/devices` | JWT — device heartbeat |

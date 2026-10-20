@@ -1,4 +1,4 @@
-use axum::{Json, extract::State};
+use axum::{Json, extract::{Multipart, State}};
 use chrono::Utc;
 use serde::Serialize;
 use uuid::Uuid;
@@ -6,14 +6,12 @@ use uuid::Uuid;
 use crate::{
     auth::middleware::AuthUser,
     error::{AppError, AppResult},
-    llm::{
-        limits,
-        provider::ChatTurn,
-    },
+    llm::{limits, provider::ChatTurn},
     models::{
         flag,
         message::{Message, SendMessageRequest},
     },
+    speech,
     state::AppState,
 };
 
@@ -22,6 +20,16 @@ pub struct SendMessageResponse {
     user_message: Message,
     assistant_message: Message,
     model: String,
+}
+
+#[derive(Serialize)]
+pub struct VoiceResponse {
+    user_message: Message,
+    assistant_message: Message,
+    model: String,
+    audio_base64: Option<String>,
+    audio_mime: Option<String>,
+    speech_error: Option<String>,
 }
 
 pub async fn list_messages(
@@ -63,6 +71,71 @@ pub async fn send_message(
         )));
     }
 
+    let turn = complete_turn(&state, &auth, &content, false).await?;
+    Ok(Json(turn))
+}
+
+pub async fn send_voice(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    multipart: Multipart,
+) -> AppResult<Json<VoiceResponse>> {
+    if flag::is_disabled(&state.pool, "voice_enabled").await? {
+        return Err(AppError::BadRequest(
+            "voice is disabled by a feature flag".into(),
+        ));
+    }
+
+    let (Some(stt), Some(tts)) = (
+        state.config.speech_stt_url.clone(),
+        state.config.speech_tts_url.clone(),
+    ) else {
+        return Err(AppError::BadRequest(
+            "voice engine is not configured".into(),
+        ));
+    };
+
+    let upload = speech::read_upload(multipart).await?;
+    // Transcribe before any row is written. An empty or failed transcript
+    // must not land in the chat history.
+    let content = speech::transcribe(&stt, &upload.wav).await?;
+    if content.chars().count() > state.config.llm_max_input_chars {
+        return Err(AppError::BadRequest(format!(
+            "content exceeds LLM_MAX_INPUT_CHARS ({})",
+            state.config.llm_max_input_chars
+        )));
+    }
+
+    let turn = complete_turn(&state, &auth, &content, true).await?;
+    match speech::synthesize(&tts, &turn.assistant_message.content, &upload.voice).await {
+        Ok(wav) => Ok(Json(VoiceResponse {
+            user_message: turn.user_message,
+            assistant_message: turn.assistant_message,
+            model: turn.model,
+            audio_base64: Some(speech::encode_wav(&wav)),
+            audio_mime: Some("audio/wav".into()),
+            speech_error: None,
+        })),
+        Err(err) => {
+            tracing::warn!("kokoro synthesis failed after the reply was saved: {err}");
+            Ok(Json(VoiceResponse {
+                user_message: turn.user_message,
+                assistant_message: turn.assistant_message,
+                model: turn.model,
+                audio_base64: None,
+                audio_mime: None,
+                speech_error: Some("Synteza mowy niedostępna.".into()),
+            }))
+        }
+    }
+}
+
+async fn complete_turn(
+    state: &AppState,
+    auth: &AuthUser,
+    content: &str,
+    spoken: bool,
+) -> AppResult<SendMessageResponse> {
     limits::check_or_rate_limit(&state.pool, &state.config, auth.id).await?;
 
     let permit = state
@@ -82,7 +155,7 @@ pub async fn send_message(
     )
     .bind(Uuid::new_v4())
     .bind(auth.id)
-    .bind(&content)
+    .bind(content)
     .bind(Utc::now())
     .fetch_one(&state.pool)
     .await
@@ -114,10 +187,7 @@ pub async fn send_message(
         0,
         ChatTurn {
             role: "system".into(),
-            content: format!(
-                "You are Jarvis, a helpful personal assistant. The user's display name is {}.",
-                auth.user.display_name
-            ),
+            content: system_prompt(&auth.user.display_name, spoken),
         },
     );
 
@@ -150,11 +220,11 @@ pub async fn send_message(
             .await
             .map_err(|e| AppError::internal(format!("insert assistant: {e}")))?;
 
-            Ok(Json(SendMessageResponse {
+            Ok(SendMessageResponse {
                 user_message,
                 assistant_message,
                 model: active.model,
-            }))
+            })
         }
         Err(err) => {
             let (provider, model) = state
@@ -175,4 +245,16 @@ pub async fn send_message(
             Err(err)
         }
     }
+}
+
+fn system_prompt(display_name: &str, spoken: bool) -> String {
+    let mut prompt = format!(
+        "You are Jarvis, a helpful personal assistant. The user's display name is {display_name}."
+    );
+    if spoken {
+        prompt.push_str(
+            " Reply in English, in one to three short spoken sentences. No Markdown and no lists. The user may have spoken Polish; understand them and answer in English.",
+        );
+    }
+    prompt
 }

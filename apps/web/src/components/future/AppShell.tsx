@@ -43,6 +43,30 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [clock, setClock] = useState("");
   const [greeting, setGreeting] = useState("Witaj");
   const [jarvis, setJarvis] = useState<JarvisVersion | null>(null);
+  const [brainUp, setBrainUp] = useState(false);
+
+  useEffect(() => {
+    let stop = false;
+    async function probe() {
+      try {
+        await api("/health");
+        if (!stop) setBrainUp(true);
+      } catch {
+        if (!stop) setBrainUp(false);
+      }
+    }
+    void probe();
+    const timer = window.setInterval(() => void probe(), 10_000);
+    const onOnline = () => void probe();
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOnline);
+    return () => {
+      stop = true;
+      window.clearInterval(timer);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOnline);
+    };
+  }, []);
 
   useEffect(() => {
     const token = getToken();
@@ -151,9 +175,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <div className="fx-top-meta">
             <JarvisVersionLines info={jarvis} />
-            <span className="fx-pill">
-              <span className="fx-dot" aria-hidden />
-              online
+            <span className={`fx-pill${brainUp ? " ok" : ""}`}>
+              <span className={`fx-dot${brainUp ? "" : " idle"}`} aria-hidden />
+              {brainUp ? "online" : "offline"}
             </span>
             <time suppressHydrationWarning>{clock}</time>
           </div>

@@ -7,6 +7,7 @@ mod host;
 mod llm;
 mod models;
 mod routes;
+mod speech;
 mod state;
 
 use std::net::SocketAddr;
@@ -63,10 +64,18 @@ async fn main() {
             std::process::exit(1);
         });
 
-    let llm = LlmRuntime::from_config(&config).await.unwrap_or_else(|e| {
-        eprintln!("llm init error: {e}");
-        std::process::exit(1);
-    });
+    let llm_route = bootstrap::load_llm_route(&pool, config.llm_model.as_deref())
+        .await
+        .unwrap_or_else(|e| {
+            eprintln!("llm route error: {e}");
+            std::process::exit(1);
+        });
+    let llm = LlmRuntime::from_config(&config, llm_route)
+        .await
+        .unwrap_or_else(|e| {
+            eprintln!("llm init error: {e}");
+            std::process::exit(1);
+        });
 
     let state = AppState {
         pool,

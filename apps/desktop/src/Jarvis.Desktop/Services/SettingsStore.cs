@@ -15,6 +15,9 @@ public sealed class SettingsStore
     public string Fingerprint { get; set; } = "";
     public string? Token { get; set; }
     public PublicUser? User { get; set; }
+    /// <summary>push or wake.</summary>
+    public string VoiceListenMode { get; set; } = "push";
+    public string KokoroVoice { get; set; } = "bm_george";
 
     public static string FilePath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

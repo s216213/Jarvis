@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/future/AppShell";
 import { JarvisMark } from "@/components/future/JarvisMark";
+import { MarkdownMessage } from "@/components/future/MarkdownMessage";
 import { ApiError, api, type Message, type UsageSnapshot } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 
@@ -103,7 +104,11 @@ export default function ChatPage() {
                   {message.role === "assistant" ? <JarvisMark size={16} glow={false} /> : null}
                   {message.role === "assistant" ? "Jarvis" : "Ty"}
                 </div>
-                <div className="text">{message.content}</div>
+                {message.role === "assistant" ? (
+                  <MarkdownMessage content={message.content} />
+                ) : (
+                  <div className="text">{message.content}</div>
+                )}
               </article>
             ))
           )}

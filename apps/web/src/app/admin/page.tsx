@@ -23,6 +23,10 @@ export default function AdminOverviewPage() {
   const [host, setHost] = useState<HostSnapshot | null>(null);
   const [jarvis, setJarvis] = useState<JarvisVersion | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [routeProvider, setRouteProvider] = useState("auto");
+  const [routeModel, setRouteModel] = useState("auto");
+  const [routeBusy, setRouteBusy] = useState(false);
+  const [routeError, setRouteError] = useState<string | null>(null);
 
   useEffect(() => {
     let stop = false;
@@ -41,6 +45,8 @@ export default function AdminOverviewPage() {
       setFlags(flagRows);
       setDevices(deviceRows);
       setStatus(llm);
+      setRouteProvider(llm.route_provider || "auto");
+      setRouteModel(llm.route_model || "auto");
     }
 
     async function loadHost() {
@@ -68,6 +74,38 @@ export default function AdminOverviewPage() {
     };
   }, []);
 
+  async function saveRoute(provider: string, model: string) {
+    const token = getToken();
+    if (!token) return;
+    setRouteBusy(true);
+    setRouteError(null);
+    try {
+      const llm = await api<LlmStatus>("/admin/llm/route", {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({ provider, model }),
+      });
+      setStatus(llm);
+      setRouteProvider(llm.route_provider || "auto");
+      setRouteModel(llm.route_model || "auto");
+    } catch (err) {
+      setRouteError(err instanceof Error ? err.message : "Nie udało się zapisać trasy.");
+    } finally {
+      setRouteBusy(false);
+    }
+  }
+
+  function onProvider(next: string) {
+    setRouteProvider(next);
+    const allowed = (status?.models ?? []).some(
+      (item) => item.provider === next && item.id === routeModel,
+    );
+    if (next !== "auto" && routeModel !== "auto" && !allowed) setRouteModel("auto");
+  }
+
+  const modelOptions = (status?.models ?? []).filter(
+    (item) => routeProvider === "auto" || item.provider === routeProvider,
+  );
   const disk = host?.disks[0];
   const diskPercent = disk ? usagePercent(disk.used_bytes, disk.total_bytes) : 0;
   const ramPercent = host
@@ -118,15 +156,82 @@ export default function AdminOverviewPage() {
           detail={disk ? disk.mount : "Odczyt…"}
         />
         <article className="fx-card">
-          <p className="fx-kicker">Model</p>
-          <p className="fx-stat">{status?.model ?? "—"}</p>
+          <p className="fx-kicker">Trasa</p>
+          <p className="fx-stat">
+            {status ? `${status.route_provider} : ${status.route_model}` : "—"}
+          </p>
           <p>
             {status
-              ? `${status.provider} · ${status.usage.global_daily_used}/${status.limits.global_daily} dziennie`
+              ? `${status.provider} · ${status.model} · ${status.usage.global_daily_used}/${status.limits.global_daily} dziennie`
               : "Status LLM"}
           </p>
         </article>
       </section>
+
+      <article className="fx-card">
+        <p className="fx-kicker">Wymuszenie modelu</p>
+        <h3>Provider i model</h3>
+        <p>
+          Zapisana trasa to{" "}
+          <span className="fx-mono">
+            {status ? `${status.route_provider} : ${status.route_model}` : "auto : auto"}
+          </span>
+          . auto : auto zostawia wybór routerowi na każdą wiadomość.
+        </p>
+        {status?.route_note ? <p className="fx-alert">{status.route_note}</p> : null}
+        {routeError ? <p className="fx-alert">{routeError}</p> : null}
+        <form
+          className="fx-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveRoute(routeProvider, routeModel);
+          }}
+        >
+          <label className="fx-field">
+            <span>Provider</span>
+            <select
+              value={routeProvider}
+              onChange={(event) => onProvider(event.target.value)}
+              disabled={routeBusy || !status}
+            >
+              <option value="auto">auto</option>
+              {(status?.providers ?? []).map((provider) => (
+                <option key={provider} value={provider}>
+                  {provider}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="fx-field">
+            <span>Model</span>
+            <select
+              value={routeModel}
+              onChange={(event) => setRouteModel(event.target.value)}
+              disabled={routeBusy || !status}
+            >
+              <option value="auto">auto</option>
+              {modelOptions.map((item) => (
+                <option key={`${item.provider}:${item.id}`} value={item.id}>
+                  {routeProvider === "auto" ? `${item.provider} · ${item.id}` : item.id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="fx-actions">
+            <button className="fx-btn" type="submit" disabled={routeBusy || !status}>
+              {routeBusy ? "…" : "Zapisz"}
+            </button>
+            <button
+              className="fx-btn fx-btn-ghost"
+              type="button"
+              disabled={routeBusy || !status}
+              onClick={() => void saveRoute("auto", "auto")}
+            >
+              auto : auto
+            </button>
+          </div>
+        </form>
+      </article>
 
       <section className="fx-grid fx-grid-3">
         <article className="fx-card">

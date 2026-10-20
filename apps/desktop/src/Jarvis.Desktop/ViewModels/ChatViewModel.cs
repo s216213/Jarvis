@@ -281,6 +281,12 @@ public partial class ChatViewModel : ObservableObject
             Messages.Remove(existing);
     }
 
+    public void AppendSaved(ChatMessage? user, ChatMessage? assistant)
+    {
+        AddIfPresent(user);
+        AddIfPresent(assistant);
+    }
+
     private void AddIfPresent(ChatMessage? message)
     {
         if (message is null || message.Id == Guid.Empty || Messages.Any(existing => existing.Id == message.Id))

@@ -57,7 +57,11 @@
                       <controls:JarvisMark Width="16" Height="16" IsVisible="{Binding IsAssistant}" VerticalAlignment="Center"/>
                       <TextBlock Text="{Binding Who}" Classes="who" VerticalAlignment="Center"/>
                     </StackPanel>
-                    <TextBlock Text="{Binding Content}" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding Content}"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding IsUser}"/>
+                    <controls:MarkdownView Source="{Binding Content}"
+                                           IsVisible="{Binding IsAssistant}"/>
                   </StackPanel>
                 </Border>
               </DataTemplate>

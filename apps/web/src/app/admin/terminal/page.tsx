@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { FormEvent, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { api, type ExecResult, type HostSnapshot } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 
@@ -19,10 +19,12 @@ export default function TerminalPage() {
   const [busy, setBusy] = useState(false);
   const [execMode, setExecMode] = useState<string>("");
   const [modeNote, setModeNote] = useState("Sprawdzam, gdzie polecenia będą wykonywane…");
+  const [hostName, setHostName] = useState("jarvis");
   const history = useRef<string[]>([]);
   const histIndex = useRef(-1);
   const nextId = useRef(1);
   const logRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const token = getToken();
@@ -32,6 +34,7 @@ export default function TerminalPage() {
       .then((snap) => {
         if (stop) return;
         setExecMode(snap.exec_mode);
+        setHostName(snap.hostname || "jarvis");
         setModeNote(
           snap.exec_mode === "host"
             ? `Host OCI · ${snap.hostname}. Polecenia wchodzą w przestrzenie VM (nsenter).`
@@ -53,7 +56,11 @@ export default function TerminalPage() {
     if (!log) return;
     const distance = log.scrollHeight - log.scrollTop - log.clientHeight;
     if (distance < 80) log.scrollTop = log.scrollHeight;
-  }, [rows, modeNote]);
+  }, [rows, modeNote, line]);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [busy]);
 
   function push(kind: Row["kind"], text: string) {
     const id = nextId.current++;
@@ -98,6 +105,16 @@ export default function TerminalPage() {
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "c" && e.ctrlKey) {
+      e.preventDefault();
+      setLine("");
+      return;
+    }
+    if (e.key === "l" && e.ctrlKey) {
+      e.preventDefault();
+      setRows([]);
+      return;
+    }
     if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
     e.preventDefault();
     const items = history.current;
@@ -108,6 +125,25 @@ export default function TerminalPage() {
         : Math.min(items.length, histIndex.current + 1);
     histIndex.current = next;
     setLine(items[next] ?? "");
+  }
+
+  function keepCaret(e: MouseEvent<HTMLElement>) {
+    const target = e.target as HTMLElement;
+    if (target.closest("input")) return;
+    if (target.closest(".cmd, .out, .err, .meta")) {
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const finish = (ev: globalThis.MouseEvent) => {
+        window.removeEventListener("mouseup", finish);
+        const moved = Math.hypot(ev.clientX - startX, ev.clientY - startY) > 4;
+        const selected = window.getSelection()?.toString();
+        if (!moved && !selected) inputRef.current?.focus();
+      };
+      window.addEventListener("mouseup", finish);
+      return;
+    }
+    e.preventDefault();
+    inputRef.current?.focus();
   }
 
   const prompt = cwd.length > 42 ? `…${cwd.slice(-40)}` : cwd;
@@ -125,7 +161,19 @@ export default function TerminalPage() {
           </p>
         </div>
       </header>
-      <section className="fx-term" aria-label="Terminal OCI">
+      <section className="fx-term" aria-label="Terminal OCI" onMouseDown={keepCaret}>
+        <div className="fx-term-bar">
+          <span className="fx-term-dots" aria-hidden>
+            <i />
+            <i />
+            <i />
+          </span>
+          <span className="fx-term-title">
+            {hostName}
+            {execMode ? ` · ${execMode}` : ""}
+          </span>
+          <span className="fx-term-title">{busy ? "uruchomione" : "gotowy"}</span>
+        </div>
         <div className="fx-term-log" ref={logRef}>
           <div className="meta">{modeNote}</div>
           {rows.map((row) => (
@@ -133,24 +181,23 @@ export default function TerminalPage() {
               {row.text}
             </div>
           ))}
+          <form className="fx-term-line" onSubmit={onSubmit}>
+            <span className="fx-term-prompt">
+              {hostName}:{prompt}$
+            </span>
+            <input
+              ref={inputRef}
+              value={line}
+              onChange={(e) => setLine(e.target.value)}
+              onKeyDown={onKeyDown}
+              autoFocus
+              autoComplete="off"
+              spellCheck={false}
+              aria-label="Polecenie"
+              aria-busy={busy}
+            />
+          </form>
         </div>
-        <form onSubmit={onSubmit}>
-          <span>{prompt}$</span>
-          <input
-            value={line}
-            onChange={(e) => setLine(e.target.value)}
-            onKeyDown={onKeyDown}
-            autoFocus
-            autoComplete="off"
-            spellCheck={false}
-            disabled={busy}
-            aria-label="Polecenie"
-            style={{ flex: 1 }}
-          />
-          <button className="fx-btn" type="submit" disabled={busy || !line.trim()}>
-            {busy ? "…" : "Wyślij"}
-          </button>
-        </form>
       </section>
     </div>
   );

@@ -32,11 +32,23 @@ export type LlmPoolSlot = {
   source: string;
 };
 
+export type LlmModelInfo = {
+  id: string;
+  display_name: string;
+  supports_chat: boolean;
+  provider: string;
+};
+
 export type LlmStatus = {
   provider: string;
   model: string;
   source: string;
+  route_provider: string;
+  route_model: string;
+  route_note: string;
+  providers: string[];
   pool?: LlmPoolSlot[];
+  models: LlmModelInfo[];
   usage: UsageSnapshot;
   limits: {
     user_rpm: number;

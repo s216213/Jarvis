@@ -22,6 +22,7 @@ pub fn router() -> Router<AppState> {
         .route("/me", get(auth::me))
         .route("/me/usage", get(auth::my_usage))
         .route("/chat/messages", get(chat::list_messages).post(chat::send_message))
+        .route("/chat/voice", post(chat::send_voice))
         .route("/admin/users", get(admin::list_users).post(admin::create_user))
         .route(
             "/admin/users/{id}",
@@ -29,6 +30,7 @@ pub fn router() -> Router<AppState> {
         )
         .route("/admin/llm/models", get(admin::llm_models))
         .route("/admin/llm/status", get(admin::llm_status))
+        .route("/admin/llm/route", patch(admin::set_llm_route))
         .route("/admin/host/metrics", get(host::metrics))
         .route("/admin/host/exec", post(host::exec_command))
         .route("/me/devices", post(devices::heartbeat))

@@ -6,6 +6,13 @@ using Jarvis.Desktop.Services;
 
 namespace Jarvis.Desktop.ViewModels;
 
+public enum ShellPage
+{
+    Chat,
+    Voice,
+    Settings,
+}
+
 public partial class ShellViewModel : ObservableObject
 {
     private readonly SessionController _session;
@@ -15,6 +22,9 @@ public partial class ShellViewModel : ObservableObject
     {
         _session = session;
         Chat = new ChatViewModel(session);
+        Voice = new VoiceViewModel(session, Chat);
+        SettingsPage = new SettingsViewModel(session, Voice);
+        Voice.StageRequested += () => Page = ShellPage.Voice;
         _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         _clock.Tick += (_, _) => UpdateClock();
         UpdateClock();
@@ -22,6 +32,22 @@ public partial class ShellViewModel : ObservableObject
     }
 
     public ChatViewModel Chat { get; }
+    public VoiceViewModel Voice { get; }
+    public SettingsViewModel SettingsPage { get; }
+
+    [ObservableProperty]
+    private ShellPage _page = ShellPage.Chat;
+
+    public bool IsChat => Page == ShellPage.Chat;
+    public bool IsVoice => Page == ShellPage.Voice;
+    public bool IsSettings => Page == ShellPage.Settings;
+
+    partial void OnPageChanged(ShellPage value)
+    {
+        OnPropertyChanged(nameof(IsChat));
+        OnPropertyChanged(nameof(IsVoice));
+        OnPropertyChanged(nameof(IsSettings));
+    }
     public string UiLabel { get; } = AppInfo.UiVersion.ToUpperInvariant();
     public string ClientVersion { get; } = AppInfo.ClientVersion;
     public string DisplayName => _session.Settings.User?.DisplayName ?? "";
@@ -55,12 +81,24 @@ public partial class ShellViewModel : ObservableObject
         var versionTask = LoadVersionAsync(token);
         var deviceTask = _session.RegisterDeviceAsync(token);
         var chatTask = Chat.LoadAsync();
-        await Task.WhenAll(versionTask, deviceTask, chatTask);
+        var voiceTask = Voice.LoadAsync();
+        await Task.WhenAll(versionTask, deviceTask, chatTask, voiceTask);
+        Voice.ApplyListenMode();
     }
+
+    [RelayCommand]
+    private void ShowChat() => Page = ShellPage.Chat;
+
+    [RelayCommand]
+    private void ShowVoice() => Page = ShellPage.Voice;
+
+    [RelayCommand]
+    private void ShowSettings() => Page = ShellPage.Settings;
 
     [RelayCommand]
     private void Logout()
     {
+        Voice.Shutdown();
         _clock.Stop();
         _session.Settings.Token = null;
         _session.Settings.User = null;

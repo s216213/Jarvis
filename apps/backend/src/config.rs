@@ -23,6 +23,10 @@ pub struct Config {
     /// `host` runs the admin terminal in the OCI VM namespaces (nsenter).
     /// `container` runs it in the API process.
     pub host_exec: String,
+    /// Faster-Whisper base URL, for example `http://jarvis-stt:9000`. Empty disables voice.
+    pub speech_stt_url: Option<String>,
+    /// Kokoro base URL, for example `http://jarvis-tts:8880`. Empty disables voice.
+    pub speech_tts_url: Option<String>,
 }
 
 impl Config {
@@ -79,8 +83,21 @@ impl Config {
                 .unwrap_or_else(|_| "container".into())
                 .trim()
                 .to_lowercase(),
+            speech_stt_url: optional_url("SPEECH_STT_URL"),
+            speech_tts_url: optional_url("SPEECH_TTS_URL"),
         })
     }
+}
+
+fn optional_url(key: &str) -> Option<String> {
+    std::env::var(key).ok().and_then(|value| {
+        let trimmed = value.trim().trim_end_matches('/').to_string();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    })
 }
 
 fn required(key: &str) -> AppResult<String> {
