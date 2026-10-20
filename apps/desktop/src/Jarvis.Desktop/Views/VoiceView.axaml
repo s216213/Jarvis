@@ -30,9 +30,7 @@
               Content="{Binding MicLabel}"
               IsEnabled="{Binding MicEnabled}"
               MinWidth="160"
-              HorizontalAlignment="Center"
-              PointerPressed="OnMicPressed"
-              PointerReleased="OnMicReleased"/>
+              HorizontalAlignment="Center"/>
     </StackPanel>
   </Grid>
 </UserControl>

@@ -25,6 +25,7 @@ const MAX_SECONDS: f64 = 20.0;
 pub struct VoiceUpload {
     pub wav: Vec<u8>,
     pub voice: String,
+    pub device_fingerprint: Option<String>,
 }
 
 pub fn resolve_voice(raw: Option<&str>) -> AppResult<String> {
@@ -39,6 +40,7 @@ pub fn resolve_voice(raw: Option<&str>) -> AppResult<String> {
 pub async fn read_upload(mut multipart: Multipart) -> AppResult<VoiceUpload> {
     let mut wav = None;
     let mut voice = None;
+    let mut device_fingerprint = None;
     while let Some(field) = multipart
         .next_field()
         .await
@@ -57,6 +59,14 @@ pub async fn read_upload(mut multipart: Multipart) -> AppResult<VoiceUpload> {
                 }
                 wav = Some(bytes.to_vec());
             }
+            Some("device_fingerprint") => {
+                device_fingerprint = Some(
+                    field
+                        .text()
+                        .await
+                        .map_err(|e| AppError::BadRequest(format!("invalid device: {e}")))?,
+                );
+            }
             Some("voice") => {
                 voice = Some(
                     field
@@ -74,6 +84,9 @@ pub async fn read_upload(mut multipart: Multipart) -> AppResult<VoiceUpload> {
     Ok(VoiceUpload {
         wav,
         voice: resolve_voice(voice.as_deref())?,
+        device_fingerprint: device_fingerprint
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
     })
 }
 
@@ -133,7 +146,9 @@ pub async fn transcribe(base: &str, wav: &[u8]) -> AppResult<String> {
         .mime_str("audio/wav")
         .map_err(|e| AppError::internal(format!("wav part: {e}")))?;
     let form = reqwest::multipart::Form::new().part("audio_file", part);
-    let url = format!("{base}/asr?task=transcribe&language=pl&output=json");
+    let url = format!(
+        "{base}/asr?task=transcribe&language=pl&output=json&vad_filter=true"
+    );
     let response = client()
         .post(url)
         .multipart(form)
@@ -177,15 +192,139 @@ struct AsrJson {
     text: Option<String>,
 }
 
+/// Turn markdown into words a person would say. Lists become "First… Second… And last…".
+pub fn speakable(text: &str) -> String {
+    let mut parts = Vec::new();
+    let mut items = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with("```") {
+            flush_items(&mut items, &mut parts);
+            continue;
+        }
+        if let Some(item) = list_item(trimmed) {
+            let spoken = plain(&item);
+            if !spoken.is_empty() {
+                items.push(spoken);
+            }
+            continue;
+        }
+        flush_items(&mut items, &mut parts);
+        let spoken = finish(plain(trimmed.trim_start_matches('#').trim()));
+        if !spoken.is_empty() {
+            parts.push(spoken);
+        }
+    }
+    flush_items(&mut items, &mut parts);
+    let spoken = parts.join(" ");
+    if spoken.is_empty() {
+        text.trim().to_string()
+    } else {
+        spoken
+    }
+}
+
+fn flush_items(items: &mut Vec<String>, parts: &mut Vec<String>) {
+    if items.is_empty() {
+        return;
+    }
+    parts.push(speak_items(items));
+    items.clear();
+}
+
+fn speak_items(items: &[String]) -> String {
+    if items.len() == 1 {
+        return finish(items[0].clone());
+    }
+    items
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let body = item.trim().trim_end_matches(['.', ';']);
+            format!("{}, {body}.", item_prefix(index, items.len()))
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn item_prefix(index: usize, len: usize) -> &'static str {
+    const ORDS: [&str; 10] = [
+        "First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth",
+        "Tenth",
+    ];
+    if index + 1 == len {
+        if len == 2 { "And second" } else { "And last" }
+    } else if index < ORDS.len() {
+        ORDS[index]
+    } else {
+        "Next"
+    }
+}
+
+fn list_item(line: &str) -> Option<String> {
+    let rest = line.trim_start();
+    if let Some(item) = rest
+        .strip_prefix("- ")
+        .or_else(|| rest.strip_prefix("* "))
+        .or_else(|| rest.strip_prefix("+ "))
+    {
+        return Some(item.to_string());
+    }
+    let digits = rest.chars().take_while(|ch| ch.is_ascii_digit()).count();
+    if digits == 0 {
+        return None;
+    }
+    rest[digits..]
+        .strip_prefix(". ")
+        .or_else(|| rest[digits..].strip_prefix(") "))
+        .map(str::to_string)
+}
+
+fn plain(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::new();
+    let mut index = 0;
+    while index < chars.len() {
+        if chars[index] == '['
+            && let Some(label_end) = chars[index + 1..].iter().position(|ch| *ch == ']')
+        {
+            let close = index + 1 + label_end;
+            if close + 1 < chars.len() && chars[close + 1] == '('
+                && let Some(url_end) = chars[close + 2..].iter().position(|ch| *ch == ')')
+            {
+                out.extend(chars[index + 1..close].iter());
+                index = close + 2 + url_end + 1;
+                continue;
+            }
+        }
+        if matches!(chars[index], '`' | '*' | '_' | '#') {
+            index += 1;
+            continue;
+        }
+        out.push(chars[index]);
+        index += 1;
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn finish(text: String) -> String {
+    let trimmed = text.trim();
+    if trimmed.is_empty() || trimmed.ends_with(['.', '!', '?', ':', ';']) {
+        trimmed.to_string()
+    } else {
+        format!("{trimmed}.")
+    }
+}
+
 pub async fn synthesize(base: &str, text: &str, voice: &str) -> AppResult<Vec<u8>> {
     let response = client()
         .post(format!("{base}/v1/audio/speech"))
         .json(&serde_json::json!({
             "model": "kokoro",
-            "input": text,
+            "input": speakable(text),
             "voice": voice,
             "response_format": "wav",
-            "speed": 0.92,
+            "speed": 1.0,
         }))
         .send()
         .await
@@ -225,7 +364,7 @@ fn client() -> &'static reqwest::Client {
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_voice, transcript_text, validate_wav};
+    use super::{resolve_voice, speakable, transcript_text, validate_wav};
 
     fn pcm_wav(samples: u32) -> Vec<u8> {
         let data_len = samples * 2;
@@ -268,6 +407,27 @@ mod tests {
     fn voice_defaults_to_george() {
         assert_eq!(resolve_voice(None).unwrap(), "bm_george");
         assert!(resolve_voice(Some("alloy")).is_err());
+    }
+
+    #[test]
+    fn lists_are_read_as_spoken_items() {
+        let text = speakable("Bring these:\n- milk\n- bread\n- eggs");
+        assert_eq!(
+            text,
+            "Bring these: First, milk. Second, bread. And last, eggs."
+        );
+    }
+
+    #[test]
+    fn two_numbered_items_use_first_and_second() {
+        let text = speakable("1. Alpha\n2. Beta");
+        assert_eq!(text, "First, Alpha. And second, Beta.");
+    }
+
+    #[test]
+    fn prose_keeps_its_sentences() {
+        let text = speakable("Yes. Use **notepad** today.");
+        assert_eq!(text, "Yes. Use notepad today.");
     }
 
     #[test]

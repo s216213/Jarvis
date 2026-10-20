@@ -67,6 +67,11 @@ pub async fn ensure_flags(pool: &DbPool) -> AppResult<()> {
             true,
             "Tryb głosowy na desktopie. Wyłączenie blokuje POST /chat/voice.",
         ),
+        (
+            "apps_enabled",
+            true,
+            "Uruchamianie aplikacji z czatu i głosu. Wyłączenie ignoruje prośby o otwarcie programu.",
+        ),
     ];
 
     for (key, enabled, description) in defaults {

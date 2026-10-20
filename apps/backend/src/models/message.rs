@@ -15,4 +15,6 @@ pub struct Message {
 #[derive(Debug, Deserialize)]
 pub struct SendMessageRequest {
     pub content: String,
+    #[serde(default)]
+    pub device_fingerprint: Option<String>,
 }

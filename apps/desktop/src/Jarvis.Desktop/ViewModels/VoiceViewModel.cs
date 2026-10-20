@@ -288,7 +288,22 @@ public partial class VoiceViewModel : ObservableObject, IDisposable
         try
         {
             var voice = VoiceChoice.Find(_session.Settings.KokoroVoice).Id;
-            var result = await _session.Api.SendVoiceAsync(token, wav, voice, cts.Token).ConfigureAwait(false);
+            _session.Settings.EnsureFingerprint();
+            var result = await _session.Api.SendVoiceAsync(
+                token,
+                wav,
+                voice,
+                _session.Settings.Fingerprint,
+                cts.Token).ConfigureAwait(false);
+            string? launchError = null;
+            try
+            {
+                launchError = await _session.ClaimAndLaunchAsync(cts.Token).ConfigureAwait(false);
+            }
+            catch (ApiException)
+            {
+                // The shell keeps asking for queued launches.
+            }
             await OnUiAsync(() =>
             {
                 if (!_alive)
@@ -297,6 +312,8 @@ public partial class VoiceViewModel : ObservableObject, IDisposable
                 Reply = result.AssistantMessage.Content;
                 _chat.AppendSaved(result.UserMessage, result.AssistantMessage);
                 Notice = result.SpeechError ?? "";
+                if (!string.IsNullOrEmpty(launchError))
+                    Error = launchError;
                 if (!string.IsNullOrEmpty(result.AudioBase64))
                 {
                     var audio = Convert.FromBase64String(result.AudioBase64);

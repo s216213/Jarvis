@@ -121,6 +121,34 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, [router]);
 
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    let stop = false;
+    async function claim() {
+      const current = getToken();
+      if (!current || stop) return;
+      try {
+        const claimed = await api<{ handoff?: string | null }>("/me/launches", {
+          method: "POST",
+          token: current,
+          body: JSON.stringify({ fingerprint: deviceFingerprint() }),
+        });
+        if (stop || !claimed.handoff) return;
+        window.dispatchEvent(new Event("jarvis-handoff"));
+        if (pathname !== "/chat") router.push("/chat");
+      } catch {
+        // The next tick asks again.
+      }
+    }
+    void claim();
+    const timer = window.setInterval(() => void claim(), 2000);
+    return () => {
+      stop = true;
+      window.clearInterval(timer);
+    };
+  }, [pathname, router]);
+
   function logout() {
     clearSession();
     router.replace("/login");

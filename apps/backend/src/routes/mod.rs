@@ -34,6 +34,7 @@ pub fn router() -> Router<AppState> {
         .route("/admin/host/metrics", get(host::metrics))
         .route("/admin/host/exec", post(host::exec_command))
         .route("/me/devices", post(devices::heartbeat))
+        .route("/me/launches", post(devices::claim_launches))
         .route(
             "/admin/devices",
             get(devices::list_devices),

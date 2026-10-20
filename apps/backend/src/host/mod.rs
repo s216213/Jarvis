@@ -1,3 +1,4 @@
+pub mod apps;
 pub mod exec;
 pub mod metrics;
 

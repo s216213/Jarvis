@@ -22,7 +22,8 @@ services:
     container_name: jarvis-stt
     environment:
       ASR_ENGINE: faster_whisper
-      ASR_MODEL: small
+      # base is several times faster than small on a 2 OCPU CPU host.
+      ASR_MODEL: base
       ASR_DEVICE: cpu
       ASR_QUANTIZATION: int8
       ASR_MODEL_PATH: /data/whisper

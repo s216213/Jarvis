@@ -1,3 +1,4 @@
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Jarvis.Desktop.Models;
 using Jarvis.Desktop.Services;
@@ -23,6 +24,7 @@ public partial class SessionController : ObservableObject
 
     public SettingsStore Settings { get; }
     public ApiClient Api { get; }
+    public event Action? HandoffArrived;
 
     [ObservableProperty]
     private object _current = new BootViewModel();
@@ -68,6 +70,24 @@ public partial class SessionController : ObservableObject
         var shell = new ShellViewModel(this);
         Current = shell;
         _ = shell.EnterAsync();
+    }
+
+    public async Task<string?> ClaimAndLaunchAsync(CancellationToken ct = default)
+    {
+        var token = Settings.Token;
+        if (string.IsNullOrEmpty(token))
+            return null;
+        Settings.EnsureFingerprint();
+        var claimed = await Api.ClaimLaunchesAsync(token, Settings.Fingerprint, ct).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(claimed.Handoff))
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                AppLauncher.BringForward();
+                HandoffArrived?.Invoke();
+            });
+        }
+        return AppLauncher.LaunchAll(claimed.Launches.Select(launch => launch.App));
     }
 
     public async Task RegisterDeviceAsync(string token)

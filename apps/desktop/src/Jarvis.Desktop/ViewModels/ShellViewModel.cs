@@ -17,6 +17,8 @@ public partial class ShellViewModel : ObservableObject
 {
     private readonly SessionController _session;
     private readonly DispatcherTimer _clock;
+    private readonly DispatcherTimer _launches;
+    private int _claiming;
 
     public ShellViewModel(SessionController session)
     {
@@ -25,8 +27,11 @@ public partial class ShellViewModel : ObservableObject
         Voice = new VoiceViewModel(session, Chat);
         SettingsPage = new SettingsViewModel(session, Voice);
         Voice.StageRequested += () => Page = ShellPage.Voice;
+        _session.HandoffArrived += OnHandoff;
         _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         _clock.Tick += (_, _) => UpdateClock();
+        _launches = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _launches.Tick += (_, _) => _ = ClaimLaunchesAsync();
         UpdateClock();
         _clock.Start();
     }
@@ -84,6 +89,8 @@ public partial class ShellViewModel : ObservableObject
         var voiceTask = Voice.LoadAsync();
         await Task.WhenAll(versionTask, deviceTask, chatTask, voiceTask);
         Voice.ApplyListenMode();
+        _launches.Start();
+        await ClaimLaunchesAsync();
     }
 
     [RelayCommand]
@@ -100,6 +107,8 @@ public partial class ShellViewModel : ObservableObject
     {
         Voice.Shutdown();
         _clock.Stop();
+        _launches.Stop();
+        _session.HandoffArrived -= OnHandoff;
         _session.Settings.Token = null;
         _session.Settings.User = null;
         _session.Settings.Save();
@@ -118,6 +127,38 @@ public partial class ShellViewModel : ObservableObject
         {
             BrainVersion = "";
             HostSystem = "—";
+        }
+    }
+
+    private void OnHandoff()
+    {
+        Page = ShellPage.Chat;
+        _ = ShowHandoffAsync();
+    }
+
+    private async Task ShowHandoffAsync()
+    {
+        await Chat.LoadAsync();
+        Chat.Notice = "Jarvis przełączył się na ten komputer.";
+    }
+
+    private async Task ClaimLaunchesAsync()
+    {
+        if (Interlocked.Exchange(ref _claiming, 1) == 1)
+            return;
+        try
+        {
+            var error = await _session.ClaimAndLaunchAsync().ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(error))
+                await Dispatcher.UIThread.InvokeAsync(() => Chat.Error = error);
+        }
+        catch (ApiException)
+        {
+            // The next tick tries again.
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _claiming, 0);
         }
     }
 

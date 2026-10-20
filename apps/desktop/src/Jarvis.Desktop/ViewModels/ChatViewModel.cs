@@ -183,7 +183,21 @@ public partial class ChatViewModel : ObservableObject
 
     private async Task SendAndApplyAsync(string token, string content, Guid optimisticId, CancellationToken ct)
     {
-        var result = await _session.Api.SendMessageAsync(token, content, ct).ConfigureAwait(false);
+        _session.Settings.EnsureFingerprint();
+        var result = await _session.Api.SendMessageAsync(
+            token,
+            content,
+            _session.Settings.Fingerprint,
+            ct).ConfigureAwait(false);
+        string? launchError = null;
+        try
+        {
+            launchError = await _session.ClaimAndLaunchAsync(ct).ConfigureAwait(false);
+        }
+        catch (ApiException)
+        {
+            // The shell keeps asking for queued launches.
+        }
         string? usageText = null;
         try
         {
@@ -201,6 +215,8 @@ public partial class ChatViewModel : ObservableObject
             AddIfPresent(result.AssistantMessage);
             if (usageText is not null)
                 UsageText = usageText;
+            if (!string.IsNullOrEmpty(launchError))
+                Error = launchError;
         });
     }
 

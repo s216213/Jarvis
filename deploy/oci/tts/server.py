@@ -43,7 +43,7 @@ class SpeechRequest(BaseModel):
     input: str
     voice: str = "bm_george"
     response_format: str = "wav"
-    speed: float = Field(default=0.92, ge=0.25, le=4.0)
+    speed: float = Field(default=1.0, ge=0.25, le=4.0)
 
 
 @app.get("/health")

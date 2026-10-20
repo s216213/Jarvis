@@ -153,10 +153,23 @@ public sealed class ApiClient
     public Task<UsageSnapshot> GetUsageAsync(string token, CancellationToken ct = default) =>
         SendAsync<UsageSnapshot>(HttpMethod.Get, "/me/usage", token, null, ct);
 
-    public Task<SendMessageResponse> SendMessageAsync(string token, string content, CancellationToken ct = default) =>
-        SendAsync<SendMessageResponse>(HttpMethod.Post, "/chat/messages", token, new SendRequest(content), ct);
+    public Task<SendMessageResponse> SendMessageAsync(
+        string token,
+        string content,
+        string fingerprint,
+        CancellationToken ct = default) =>
+        SendAsync<SendMessageResponse>(HttpMethod.Post, "/chat/messages", token, new SendMessageBody
+        {
+            Content = content,
+            DeviceFingerprint = fingerprint,
+        }, ct);
 
-    public Task<VoiceResponse> SendVoiceAsync(string token, byte[] wav, string voice, CancellationToken ct = default)
+    public Task<VoiceResponse> SendVoiceAsync(
+        string token,
+        byte[] wav,
+        string voice,
+        string fingerprint,
+        CancellationToken ct = default)
     {
         var audio = new ByteArrayContent(wav);
         audio.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
@@ -164,6 +177,7 @@ public sealed class ApiClient
         {
             { audio, "audio", "speech.wav" },
             { new StringContent(voice), "voice" },
+            { new StringContent(fingerprint), "device_fingerprint" },
         };
         return SendContentAsync<VoiceResponse>(HttpMethod.Post, "/chat/voice", token, form, ct);
     }
@@ -173,6 +187,14 @@ public sealed class ApiClient
 
     public Task RegisterDeviceAsync(string token, DeviceHeartbeat body, CancellationToken ct = default) =>
         SendAsync<JsonElement>(HttpMethod.Post, "/me/devices", token, body, ct);
+
+    public Task<ClaimLaunchesResponse> ClaimLaunchesAsync(string token, string fingerprint, CancellationToken ct = default) =>
+        SendAsync<ClaimLaunchesResponse>(
+            HttpMethod.Post,
+            "/me/launches",
+            token,
+            new ClaimLaunchesRequest { Fingerprint = fingerprint },
+            ct);
 
     private Task<T> SendAsync<T>(HttpMethod method, string path, string? token, object? body, CancellationToken ct)
     {

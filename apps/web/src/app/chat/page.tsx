@@ -6,11 +6,13 @@ import { JarvisMark } from "@/components/future/JarvisMark";
 import { MarkdownMessage } from "@/components/future/MarkdownMessage";
 import { ApiError, api, type Message, type UsageSnapshot } from "@/lib/api";
 import { getToken } from "@/lib/auth";
+import { deviceFingerprint } from "@/lib/device";
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [content, setContent] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [usage, setUsage] = useState<UsageSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -43,12 +45,26 @@ export default function ChatPage() {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
 
+  useEffect(() => {
+    function onHandoff() {
+      setNotice("Jarvis przełączył się na tę przeglądarkę.");
+      const token = getToken();
+      if (!token) return;
+      api<Message[]>("/chat/messages", { token })
+        .then(setMessages)
+        .catch(() => {});
+    }
+    window.addEventListener("jarvis-handoff", onHandoff);
+    return () => window.removeEventListener("jarvis-handoff", onHandoff);
+  }, []);
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     const token = getToken();
     if (!token || !content.trim()) return;
     setLoading(true);
     setError(null);
+    setNotice(null);
     try {
       const res = await api<{
         user_message: Message;
@@ -56,7 +72,7 @@ export default function ChatPage() {
       }>("/chat/messages", {
         method: "POST",
         token,
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, device_fingerprint: deviceFingerprint() }),
       });
       setMessages((prev) => [...prev, res.user_message, res.assistant_message]);
       setContent("");
@@ -91,6 +107,11 @@ export default function ChatPage() {
             </p>
           ) : null}
         </div>
+        {notice ? (
+          <p className="fx-note" role="status">
+            {notice}
+          </p>
+        ) : null}
         <div className="fx-messages" aria-live="polite">
           {messages.length === 0 ? (
             <p className="fx-note">Brak wiadomości — napisz do Jarvisa.</p>

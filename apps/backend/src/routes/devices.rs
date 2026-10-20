@@ -3,11 +3,13 @@ use axum::{
     extract::{Path, State},
 };
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
     auth::middleware::AuthUser,
     error::{AppError, AppResult},
+    host::apps,
     models::{
         device::{
             AdminDevice, Device, HeartbeatRequest, UpdateDeviceRequest, valid_fingerprint,
@@ -190,6 +192,46 @@ pub async fn delete_device(
         return Err(AppError::NotFound);
     }
     Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+#[derive(Deserialize)]
+pub struct ClaimLaunchesRequest {
+    pub fingerprint: String,
+}
+
+#[derive(Serialize)]
+pub struct ClaimedLaunchBody {
+    pub id: Uuid,
+    pub app: String,
+}
+
+#[derive(Serialize)]
+pub struct ClaimLaunchesResponse {
+    pub launches: Vec<ClaimedLaunchBody>,
+    pub handoff: Option<String>,
+}
+
+pub async fn claim_launches(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<ClaimLaunchesRequest>,
+) -> AppResult<Json<ClaimLaunchesResponse>> {
+    let fingerprint = body.fingerprint.trim();
+    if !valid_fingerprint(fingerprint) {
+        return Err(AppError::BadRequest("invalid fingerprint".into()));
+    }
+    let claimed = apps::claim_client(&state.pool, auth.id, fingerprint).await?;
+    Ok(Json(ClaimLaunchesResponse {
+        launches: claimed
+            .launches
+            .into_iter()
+            .map(|item| ClaimedLaunchBody {
+                id: item.id,
+                app: item.app,
+            })
+            .collect(),
+        handoff: claimed.handoff,
+    }))
 }
 
 async fn load_admin(state: &AppState, id: Uuid) -> AppResult<Json<AdminDevice>> {

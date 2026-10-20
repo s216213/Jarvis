@@ -22,11 +22,19 @@ public sealed class ChatMessage
     public string Who => IsAssistant ? "JARVIS" : "TY";
 }
 
+public sealed class AppLaunch
+{
+    public string App { get; set; } = "";
+    public string Status { get; set; } = "";
+    public string? Error { get; set; }
+}
+
 public sealed class SendMessageResponse
 {
     public ChatMessage UserMessage { get; set; } = new();
     public ChatMessage AssistantMessage { get; set; } = new();
     public string Model { get; set; } = "";
+    public List<AppLaunch> Launches { get; set; } = [];
 }
 
 public sealed class VoiceResponse
@@ -37,6 +45,7 @@ public sealed class VoiceResponse
     public string? AudioBase64 { get; set; }
     public string? AudioMime { get; set; }
     public string? SpeechError { get; set; }
+    public List<AppLaunch> Launches { get; set; } = [];
 }
 
 public sealed class UsageSnapshot
@@ -79,7 +88,28 @@ public sealed class LoginResponse
 
 public sealed record LoginRequest(string Email, string Password);
 
-public sealed record SendRequest(string Content);
+public sealed class ClaimLaunchesRequest
+{
+    public string Fingerprint { get; set; } = "";
+}
+
+public sealed class ClaimedLaunch
+{
+    public Guid Id { get; set; }
+    public string App { get; set; } = "";
+}
+
+public sealed class ClaimLaunchesResponse
+{
+    public List<ClaimedLaunch> Launches { get; set; } = [];
+    public string? Handoff { get; set; }
+}
+
+public sealed class SendMessageBody
+{
+    public string Content { get; set; } = "";
+    public string? DeviceFingerprint { get; set; }
+}
 
 public sealed class DeviceHeartbeat
 {
