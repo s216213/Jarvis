@@ -161,7 +161,7 @@ pub async fn send_message(
                 .llm
                 .status()
                 .await
-                .map(|(a, _)| (a.provider, a.model))
+                .map(|status| (status.provider, status.model))
                 .unwrap_or_else(|_| ("unknown".into(), "unknown".into()));
             let _ = limits::record_usage(
                 &state.pool,

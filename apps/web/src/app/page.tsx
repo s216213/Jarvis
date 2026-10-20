@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { JarvisMark } from "@/components/future/JarvisMark";
 import { getToken } from "@/lib/auth";
 
 export default function HomePage() {
@@ -11,5 +12,10 @@ export default function HomePage() {
     router.replace(getToken() ? "/chat" : "/login");
   }, [router]);
 
-  return <div className="fx-boot">Jarvis</div>;
+  return (
+    <div className="fx-boot">
+      <JarvisMark size={88} />
+      <span>Jarvis</span>
+    </div>
+  );
 }

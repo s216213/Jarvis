@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/future/AppShell";
+import { JarvisMark } from "@/components/future/JarvisMark";
 import { ApiError, api, type Message, type UsageSnapshot } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 
@@ -98,7 +99,10 @@ export default function ChatPage() {
                 key={message.id}
                 className={`fx-bubble ${message.role === "assistant" ? "assistant" : ""}`}
               >
-                <div className="who">{message.role === "assistant" ? "Jarvis" : "Ty"}</div>
+                <div className="who">
+                  {message.role === "assistant" ? <JarvisMark size={16} glow={false} /> : null}
+                  {message.role === "assistant" ? "Jarvis" : "Ty"}
+                </div>
                 <div className="text">{message.content}</div>
               </article>
             ))

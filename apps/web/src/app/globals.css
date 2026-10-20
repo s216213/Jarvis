@@ -97,14 +97,13 @@ textarea {
 }
 
 .fx-mark {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 40% 40%, #fff, transparent 28%),
-    conic-gradient(from 120deg, var(--fx-cyan), var(--fx-violet), var(--fx-magenta), var(--fx-cyan));
-  box-shadow: 0 0 22px rgba(62, 224, 255, 0.45);
+  display: block;
   flex: none;
+  filter: drop-shadow(0 0 12px rgba(62, 224, 255, 0.4));
+}
+
+.fx-mark-quiet {
+  filter: none;
 }
 
 .fx-brand-copy {
@@ -229,6 +228,8 @@ textarea {
 
 .fx-content {
   width: min(var(--fx-content), calc(100% - 2rem));
+  max-width: 100%;
+  min-width: 0;
   margin: 0 auto;
   padding: 0.8rem 0 2.5rem;
 }
@@ -273,10 +274,13 @@ textarea {
 .fx-stack {
   display: grid;
   gap: 0.9rem;
+  min-width: 0;
 }
 
 .fx-card {
   position: relative;
+  min-width: 0;
+  max-width: 100%;
   background:
     linear-gradient(180deg, rgba(22, 32, 64, 0.78), rgba(8, 14, 32, 0.88));
   border: 1px solid var(--fx-line);
@@ -481,7 +485,20 @@ textarea {
 }
 
 .fx-table-wrap {
+  min-width: 0;
+  max-width: 100%;
   overflow: auto;
+}
+
+.fx-table-scroll {
+  max-height: min(46vh, 520px);
+}
+
+.fx-table-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #10182e;
 }
 
 table {
@@ -496,6 +513,7 @@ td {
   padding: 0.7rem 0.45rem;
   border-bottom: 1px solid var(--fx-line);
   vertical-align: middle;
+  overflow-wrap: anywhere;
 }
 
 th {
@@ -559,6 +577,9 @@ th {
 }
 
 .fx-bubble .who {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   font-size: 0.7rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -750,6 +771,10 @@ code {
   padding: 1.4rem;
 }
 
+.fx-login-card .fx-mark {
+  margin-bottom: 0.9rem;
+}
+
 .fx-login h1 {
   font-size: clamp(2.4rem, 6vw, 3.4rem);
   letter-spacing: 0.08em;
@@ -762,8 +787,11 @@ code {
 
 .fx-boot {
   min-height: 100vh;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
   font-family: var(--font-display), sans-serif;
   letter-spacing: 0.16em;
   text-transform: uppercase;

@@ -1,15 +1,15 @@
 # Jarvis
 
-Multi-client assistant: Rust API on Oracle OCI, Next.js on Vercel (Flutter / C# later).
+Multi-client assistant: Rust API on Oracle OCI, Next.js on Vercel, Avalonia desktop (Flutter later).
 
 ## Layout
 
 | Path | Role |
 |------|------|
-| `apps/backend` | Axum API + Postgres + Gemini |
+| `apps/backend` | Axum API + Postgres + pula modeli free tier (Gemini, Groq) |
 | `apps/web` | Next.js 16 (pnpm) — login, czat, admin |
 | `apps/android` | Flutter — later |
-| `apps/desktop` | C# — later |
+| `apps/desktop` | Avalonia (C#) — login and chat |
 | `deploy/oci` | `docker-compose.yml` + `.env.example` |
 
 ## Stage 2 — multi-user + Gemini + web
@@ -17,7 +17,7 @@ Multi-client assistant: Rust API on Oracle OCI, Next.js on Vercel (Flutter / C# 
 - Public: **login only** (no self-register)
 - Admin creates users (`POST /admin/users` / panel `/admin`)
 - First admin: `BOOTSTRAP_ADMIN_EMAIL` + `BOOTSTRAP_ADMIN_PASSWORD` when DB is empty
-- Chat via Gemini; model auto-picked (latest chat-capable) unless `LLM_MODEL` is pinned
+- Chat keeps every configured free-tier provider (Gemini and Groq when their keys are set) and picks one model per turn. The choice depends on the task, that model's quota, prompt size, and cooldowns after provider errors. A failed call falls through to the next best fit. `LLM_MODEL` pins a single model and turns task routing off.
 - AI rate limits (per-user + global RPM/daily, input size, concurrency)
 
 ### Env on OCI VM
@@ -27,7 +27,7 @@ Manual file only: **`~/jarvis/.env`** (never written by CI).
 ```bash
 # on VM
 cp /path/to/repo/deploy/oci/.env.example ~/jarvis/.env
-# edit secrets, GEMINI_API_KEY, JWT_SECRET, POSTGRES_*, CORS_ORIGINS, bootstrap admin
+# edit secrets, GEMINI_API_KEY, GROQ_API_KEY, JWT_SECRET, POSTGRES_*, CORS_ORIGINS, bootstrap admin
 ```
 
 Deploy layout:
@@ -51,7 +51,7 @@ Deploy layout:
 | `LLM_CONTEXT_MESSAGES` | 20 |
 | `LLM_MAX_INFLIGHT` | 3 |
 
-Over limit → HTTP `429` `{ "error": "rate_limited", "retry_after_sec", "scope" }` without calling Gemini.
+Over limit → HTTP `429` `{ "error": "rate_limited", "retry_after_sec", "scope" }` without calling a provider. A provider's own 429 cools that model down and the same turn tries the next model that still fits.
 
 ### Local API (SQLite — no Docker)
 
@@ -96,12 +96,24 @@ Vercel:
 
 Package manager is pinned via `packageManager` in `apps/web/package.json` (pnpm).
 
+### Desktop (Avalonia)
+
+Chat client only. Admin tools stay in the web app.
+
+```bash
+cd apps/desktop
+dotnet run --project src/Jarvis.Desktop
+```
+
+.NET 10 SDK. The login screen asks for the API address (default `http://localhost:8080`).
+
 ### LLM roadmap
 
-1. **Now:** Gemini (free tier), auto model
-2. Later: Groq free tier
-3. Later: OpenRouter free tier
-4. Later: admin UI model picker (`GET /admin/llm/models` already exists)
+Jarvis keeps a pool of free-tier models and chooses one per turn. Task shape (short chat versus code, reasoning, or a long thread), each model's free-tier RPM / daily / token budget, and cooldowns after errors decide the order. One reply still comes from one model; the others stay available for the turns they fit.
+
+1. **Now:** Gemini and Groq free tiers, routed pool (`GEMINI_API_KEY`, `GROQ_API_KEY`; optional `LLM_PROVIDERS`)
+2. Later: OpenRouter free tier
+3. Later: admin UI model picker (`GET /admin/llm/models` already lists the pool)
 
 ### API sketch
 
@@ -124,7 +136,7 @@ Package manager is pinned via `packageManager` in `apps/web/package.json` (pnpm)
 
 ### future-ui-v1
 
-Shared look for web, Android, and desktop. Tokens: [`design/future-ui-v1/tokens.json`](design/future-ui-v1/tokens.json). Web is the implementation; Android and desktop follow the same tokens when those clients are built.
+Shared look for web, Android, and desktop. Tokens: [`design/future-ui-v1/tokens.json`](design/future-ui-v1/tokens.json). Web and the Avalonia desktop client implement them. Android follows the same tokens when that client is built.
 
 Jarvis version is three parts: the client UI version, `brain_version` (this API, `GET /version`), and the host system version. Device registration stays separate (`ui_version`, `client_version`, `system_name`, `system_version`).
 

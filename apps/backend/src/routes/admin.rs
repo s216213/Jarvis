@@ -201,6 +201,7 @@ pub struct LlmModelsResponse {
     active: String,
     source: String,
     provider: String,
+    pool: Vec<crate::llm::ActiveModel>,
     models: Vec<crate::llm::provider::ModelInfo>,
 }
 
@@ -219,12 +220,13 @@ pub async fn llm_models(
     auth: AuthUser,
 ) -> AppResult<Json<LlmModelsResponse>> {
     auth.require_admin()?;
-    let (active, models) = state.llm.status().await?;
+    let status = state.llm.status().await?;
     Ok(Json(LlmModelsResponse {
-        active: active.model.clone(),
-        source: active.source.clone(),
-        provider: active.provider,
-        models,
+        active: status.model.clone(),
+        source: status.source.clone(),
+        provider: status.provider,
+        pool: status.slots,
+        models: status.models,
     }))
 }
 
@@ -233,6 +235,7 @@ pub struct LlmStatusResponse {
     provider: String,
     model: String,
     source: String,
+    pool: Vec<crate::llm::ActiveModel>,
     usage: limits::UsageSnapshot,
     limits: LimitConfigView,
 }
@@ -253,12 +256,13 @@ pub async fn llm_status(
     auth: AuthUser,
 ) -> AppResult<Json<LlmStatusResponse>> {
     auth.require_admin()?;
-    let (active, _) = state.llm.status().await?;
+    let status = state.llm.status().await?;
     let usage = limits::snapshot(&state.pool, &state.config, auth.id).await?;
     Ok(Json(LlmStatusResponse {
-        provider: active.provider,
-        model: active.model,
-        source: active.source,
+        provider: status.provider,
+        model: status.model,
+        source: status.source,
+        pool: status.slots,
         usage,
         limits: LimitConfigView {
             user_rpm: state.config.llm_user_rpm,

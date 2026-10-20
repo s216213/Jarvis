@@ -1,0 +1,73 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Jarvis.Desktop.Controls"
+             xmlns:vm="using:Jarvis.Desktop.ViewModels"
+             xmlns:models="using:Jarvis.Desktop.Models"
+             x:Class="Jarvis.Desktop.Views.ChatView"
+             x:DataType="vm:ChatViewModel">
+  <controls:GlassCard>
+    <DockPanel>
+      <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+        <StackPanel Spacing="2">
+          <TextBlock Text="ROZMOWA" Classes="kicker"/>
+          <TextBlock Text="Czat" Classes="page-title"/>
+        </StackPanel>
+        <TextBlock Grid.Column="1"
+                   Text="{Binding UsageText}"
+                   Classes="muted"
+                   VerticalAlignment="Bottom"
+                   IsVisible="{Binding HasUsage}"/>
+      </Grid>
+
+      <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,14,0,0">
+        <TextBlock Text="{Binding Notice}" Classes="muted" IsVisible="{Binding HasNotice}"/>
+        <TextBlock Text="{Binding Error}" Classes="alert" IsVisible="{Binding HasError}"/>
+        <TextBlock Text="WIADOMOŚĆ" Classes="field-label"/>
+        <TextBox Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}"
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap"
+                 MinHeight="96"
+                 IsEnabled="{Binding ChatEnabled}"
+                 Watermark="Wiadomość do Jarvisa…"/>
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <Button Classes="fx"
+                  Command="{Binding SendCommand}"
+                  Content="{Binding SendLabel}"
+                  MinWidth="120"/>
+          <TextBlock Text="Ctrl+Enter wysyła" Classes="muted" VerticalAlignment="Center"/>
+        </StackPanel>
+      </StackPanel>
+
+      <ScrollViewer x:Name="Log" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel>
+          <TextBlock Text="Brak wiadomości — napisz do Jarvisa."
+                     Classes="muted"
+                     IsVisible="{Binding IsEmpty}"
+                     Margin="0,8,0,12"/>
+          <ItemsControl ItemsSource="{Binding Messages}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="models:ChatMessage">
+                <Border Classes="bubble"
+                        Classes.assistant="{Binding IsAssistant}"
+                        HorizontalAlignment="Left"
+                        MaxWidth="680"
+                        Margin="0,0,0,10">
+                  <StackPanel Spacing="4">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <controls:JarvisMark Width="16" Height="16" IsVisible="{Binding IsAssistant}" VerticalAlignment="Center"/>
+                      <TextBlock Text="{Binding Who}" Classes="who" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding Content}" TextWrapping="Wrap"/>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
+    </DockPanel>
+  </controls:GlassCard>
+  <UserControl.KeyBindings>
+    <KeyBinding Gesture="Ctrl+Enter" Command="{Binding SendCommand}"/>
+  </UserControl.KeyBindings>
+</UserControl>

@@ -1,0 +1,88 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Jarvis.Desktop.Controls"
+             xmlns:vm="using:Jarvis.Desktop.ViewModels"
+             xmlns:views="using:Jarvis.Desktop.Views"
+             x:Class="Jarvis.Desktop.Views.ShellView"
+             x:DataType="vm:ShellViewModel">
+  <Grid ColumnDefinitions="248,*">
+    <Border Background="#C8060A16" BorderBrush="#2994BAFF" BorderThickness="0,0,1,0" Padding="14,18,14,16">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="6,2,6,22">
+          <controls:JarvisMark Width="36" Height="36"/>
+          <StackPanel VerticalAlignment="Center" Spacing="2">
+            <TextBlock Text="JARVIS" Classes="brand"/>
+            <TextBlock Text="{Binding BrainVersion}" Classes="brand-version" IsVisible="{Binding HasBrain}"/>
+          </StackPanel>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="4,16,4,4">
+          <TextBlock Text="{Binding DisplayName}" Classes="muted" TextTrimming="CharacterEllipsis"/>
+          <Button Classes="fx ghost" Command="{Binding LogoutCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Path Width="16"
+                    Height="16"
+                    Stretch="Uniform"
+                    Stroke="#E7F0FF"
+                    StrokeThickness="1.6"
+                    StrokeLineCap="Round"
+                    StrokeJoin="Round"
+                    Fill="Transparent"
+                    Data="M10,7 V5.5 A1.5,1.5 0 0 1 11.5,4 H18.5 A1.5,1.5 0 0 1 20,5.5 V18.5 A1.5,1.5 0 0 1 18.5,20 H11.5 A1.5,1.5 0 0 1 10,18.5 V17 M4,12 H14 M11,9 L14,12 L11,15"/>
+              <TextBlock Text="Wyloguj"/>
+            </StackPanel>
+          </Button>
+        </StackPanel>
+
+        <Border Classes="nav-active">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Path Width="18"
+                  Height="18"
+                  Stretch="Uniform"
+                  Stroke="#E7F0FF"
+                  StrokeThickness="1.6"
+                  StrokeLineCap="Round"
+                  StrokeJoin="Round"
+                  Fill="Transparent"
+                  Data="M6,6.5 H18 V14.5 H9 L6,17.5 V6.5 Z"/>
+            <TextBlock Text="Czat" VerticalAlignment="Center"/>
+          </StackPanel>
+        </Border>
+      </DockPanel>
+    </Border>
+
+    <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="28,18,28,20">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Spacing="2">
+          <TextBlock Text="{Binding UiLabel}" Classes="kicker"/>
+          <TextBlock Text="{Binding Headline}" Classes="headline"/>
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="16" VerticalAlignment="Bottom">
+          <StackPanel Spacing="2" VerticalAlignment="Center">
+            <Grid ColumnDefinitions="58,*">
+              <TextBlock Text="UI" Classes="version-key"/>
+              <TextBlock Grid.Column="1" Text="{Binding ClientVersion}" Classes="version-value"/>
+            </Grid>
+            <Grid ColumnDefinitions="58,*">
+              <TextBlock Text="BRAIN" Classes="version-key"/>
+              <TextBlock Grid.Column="1" Text="{Binding BrainVersion}" Classes="version-value"/>
+            </Grid>
+            <Grid ColumnDefinitions="58,*">
+              <TextBlock Text="SYSTEM" Classes="version-key"/>
+              <TextBlock Grid.Column="1" Text="{Binding HostSystem}" Classes="version-value"/>
+            </Grid>
+          </StackPanel>
+          <Border Classes="pill" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Ellipse Width="7" Height="7" Fill="#3DFFC0" VerticalAlignment="Center"/>
+              <TextBlock Text="ONLINE" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Border>
+          <TextBlock Text="{Binding ClockText}" Classes="muted" VerticalAlignment="Center"/>
+        </StackPanel>
+      </Grid>
+
+      <views:ChatView Grid.Row="1" DataContext="{Binding Chat}" Margin="0,18,0,0"/>
+    </Grid>
+  </Grid>
+</UserControl>

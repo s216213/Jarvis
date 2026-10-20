@@ -1,0 +1,15 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fluent="using:Avalonia.Themes.Fluent"
+             x:Class="Jarvis.Desktop.App"
+             RequestedThemeVariant="Dark">
+  <Application.Resources>
+    <FontFamily x:Key="DisplayFont">avares://Jarvis.Desktop/Assets/Fonts/Syne-700.ttf#Syne</FontFamily>
+    <FontFamily x:Key="BodyFont">avares://Jarvis.Desktop/Assets/Fonts/Outfit.ttf#Outfit, Segoe UI, Inter</FontFamily>
+    <FontFamily x:Key="MonoFont">avares://Jarvis.Desktop/Assets/Fonts/JetBrainsMono.ttf#JetBrains Mono, Cascadia Mono, Consolas</FontFamily>
+  </Application.Resources>
+  <Application.Styles>
+    <fluent:FluentTheme />
+    <StyleInclude Source="avares://Jarvis.Desktop/Styles/FutureUi.axaml"/>
+  </Application.Styles>
+</Application>

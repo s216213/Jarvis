@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, api, type PublicUser } from "@/lib/api";
 import { getToken, setSession } from "@/lib/auth";
+import { JarvisMark } from "@/components/future/JarvisMark";
 import { FUTURE_UI } from "@/lib/future";
 
 export default function LoginPage() {
@@ -50,6 +51,7 @@ export default function LoginPage() {
     <main className="fx-login">
       <div className="fx-orb" aria-hidden />
       <section className="fx-card fx-login-card">
+        <JarvisMark size={64} />
         <p className="fx-kicker">{FUTURE_UI}</p>
         <h1>
           Jar<span>vis</span>

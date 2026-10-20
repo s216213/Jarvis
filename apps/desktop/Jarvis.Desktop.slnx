@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Jarvis.Desktop/Jarvis.Desktop.csproj" />
+  </Folder>
+</Solution>

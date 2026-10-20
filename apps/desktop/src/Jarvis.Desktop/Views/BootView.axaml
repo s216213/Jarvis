@@ -1,0 +1,12 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Jarvis.Desktop.Controls"
+             x:Class="Jarvis.Desktop.Views.BootView">
+  <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="14">
+    <controls:JarvisMark Width="88" Height="88" HorizontalAlignment="Center"/>
+    <TextBlock Text="FUTURE-UI-V1" Classes="kicker" HorizontalAlignment="Center"/>
+    <TextBlock Classes="hero" HorizontalAlignment="Center">
+      <Run Text="JAR"/><Run Text="VIS" Foreground="#3EE0FF"/>
+    </TextBlock>
+  </StackPanel>
+</UserControl>

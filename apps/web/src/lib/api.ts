@@ -26,10 +26,17 @@ export type UsageSnapshot = {
   global_daily_limit: number;
 };
 
+export type LlmPoolSlot = {
+  provider: string;
+  model: string;
+  source: string;
+};
+
 export type LlmStatus = {
   provider: string;
   model: string;
   source: string;
+  pool?: LlmPoolSlot[];
   usage: UsageSnapshot;
   limits: {
     user_rpm: number;

@@ -1,0 +1,206 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:Jarvis.Desktop.Controls">
+
+  <Style Selector="Window">
+    <Setter Property="FontFamily" Value="{StaticResource BodyFont}"/>
+    <Setter Property="FontSize" Value="15"/>
+    <Setter Property="Foreground" Value="#E7F0FF"/>
+    <Setter Property="Background" Value="#060914"/>
+  </Style>
+
+  <Style Selector="TextBlock.kicker">
+    <Setter Property="Foreground" Value="#3EE0FF"/>
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="LetterSpacing" Value="1.6"/>
+  </Style>
+
+  <Style Selector="TextBlock.brand">
+    <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="FontSize" Value="18"/>
+    <Setter Property="LetterSpacing" Value="1.6"/>
+    <Setter Property="Foreground" Value="#E7F0FF"/>
+  </Style>
+
+  <Style Selector="TextBlock.brand-version">
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="Foreground" Value="#3EE0FF"/>
+    <Setter Property="LetterSpacing" Value="1"/>
+  </Style>
+
+  <Style Selector="TextBlock.headline">
+    <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="FontSize" Value="32"/>
+    <Setter Property="Foreground" Value="#E7F0FF"/>
+  </Style>
+
+  <Style Selector="TextBlock.hero">
+    <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="FontSize" Value="54"/>
+    <Setter Property="LetterSpacing" Value="4"/>
+    <Setter Property="Foreground" Value="#E7F0FF"/>
+  </Style>
+
+  <Style Selector="TextBlock.page-title">
+    <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="FontSize" Value="30"/>
+    <Setter Property="Foreground" Value="#E7F0FF"/>
+  </Style>
+
+  <Style Selector="TextBlock.muted">
+    <Setter Property="Foreground" Value="#8EA3C7"/>
+    <Setter Property="TextWrapping" Value="Wrap"/>
+  </Style>
+
+  <Style Selector="TextBlock.field-label">
+    <Setter Property="Foreground" Value="#8EA3C7"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="LetterSpacing" Value="0.8"/>
+  </Style>
+
+  <Style Selector="TextBlock.alert">
+    <Setter Property="Foreground" Value="#FF5D7A"/>
+    <Setter Property="TextWrapping" Value="Wrap"/>
+  </Style>
+
+  <Style Selector="TextBlock.version-key">
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="Foreground" Value="#3EE0FF"/>
+  </Style>
+
+  <Style Selector="TextBlock.version-value">
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="Foreground" Value="#E7F0FF"/>
+  </Style>
+
+  <Style Selector="TextBlock.who">
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="Foreground" Value="#8EA3C7"/>
+    <Setter Property="LetterSpacing" Value="1.2"/>
+  </Style>
+
+  <Style Selector="TextBox">
+    <Setter Property="FontFamily" Value="{StaticResource BodyFont}"/>
+    <Setter Property="FontSize" Value="15"/>
+    <Setter Property="Background" Value="#A6080C18"/>
+    <Setter Property="Foreground" Value="#E7F0FF"/>
+    <Setter Property="BorderBrush" Value="#2994BAFF"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="12"/>
+    <Setter Property="Padding" Value="12,10"/>
+    <Setter Property="MinHeight" Value="44"/>
+    <Setter Property="CaretBrush" Value="#3EE0FF"/>
+    <Setter Property="SelectionBrush" Value="#553EE0FF"/>
+    <Setter Property="SelectionForegroundBrush" Value="#E7F0FF"/>
+  </Style>
+  <Style Selector="TextBox:pointerover">
+    <Setter Property="BorderBrush" Value="#663EE0FF"/>
+    <Setter Property="Background" Value="#C6080C18"/>
+  </Style>
+  <Style Selector="TextBox:focus">
+    <Setter Property="BorderBrush" Value="#3EE0FF"/>
+    <Setter Property="Background" Value="#C6080C18"/>
+  </Style>
+
+  <Style Selector="Button.fx">
+    <Setter Property="Background" Value="#2E1A3A52"/>
+    <Setter Property="Foreground" Value="#E7F0FF"/>
+    <Setter Property="BorderBrush" Value="#733EE0FF"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="12"/>
+    <Setter Property="Padding" Value="14,10"/>
+    <Setter Property="MinHeight" Value="42"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="FontFamily" Value="{StaticResource BodyFont}"/>
+  </Style>
+  <Style Selector="Button.fx:pointerover">
+    <Setter Property="Background" Value="#443EE0FF"/>
+    <Setter Property="BorderBrush" Value="#3EE0FF"/>
+  </Style>
+  <Style Selector="Button.fx:pressed">
+    <Setter Property="Background" Value="#553EE0FF"/>
+  </Style>
+  <Style Selector="Button.fx:disabled">
+    <Setter Property="Opacity" Value="0.5"/>
+  </Style>
+  <Style Selector="Button.fx.ghost">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="#2994BAFF"/>
+  </Style>
+  <Style Selector="Button.fx.ghost:pointerover">
+    <Setter Property="Background" Value="#143EE0FF"/>
+    <Setter Property="BorderBrush" Value="#663EE0FF"/>
+  </Style>
+
+  <Style Selector="Border.nav-active">
+    <Setter Property="Background" Value="#243EE0FF"/>
+    <Setter Property="BorderBrush" Value="#483EE0FF"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="12"/>
+    <Setter Property="Padding" Value="12,10"/>
+    <Setter Property="BoxShadow" Value="inset 2 0 0 0 #3EE0FF"/>
+  </Style>
+
+  <Style Selector="Border.pill">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="#2994BAFF"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="999"/>
+    <Setter Property="Padding" Value="10,4"/>
+  </Style>
+  <Style Selector="Border.pill TextBlock">
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Foreground" Value="#8EA3C7"/>
+    <Setter Property="LetterSpacing" Value="0.8"/>
+  </Style>
+
+  <Style Selector="Border.bubble">
+    <Setter Property="Background" Value="#B8080E1E"/>
+    <Setter Property="BorderBrush" Value="#2994BAFF"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="16"/>
+    <Setter Property="Padding" Value="14,12"/>
+  </Style>
+  <Style Selector="Border.bubble.assistant">
+    <Setter Property="BorderBrush" Value="#593EE0FF"/>
+    <Setter Property="BorderThickness" Value="2,1,1,1"/>
+  </Style>
+
+  <Style Selector="controls|GlassCard">
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="VerticalAlignment" Value="Stretch"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Panel>
+          <Border Background="#C8141E38"
+                  BorderBrush="#2994BAFF"
+                  BorderThickness="1"
+                  CornerRadius="18"
+                  Padding="18,16,18,16"
+                  BoxShadow="0 18 50 0 #48000000">
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+          </Border>
+          <Border Width="14" Height="1" Background="#3EE0FF" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8,8,0,0" IsHitTestVisible="False"/>
+          <Border Width="1" Height="14" Background="#3EE0FF" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8,8,0,0" IsHitTestVisible="False"/>
+          <Border Width="14" Height="1" Background="#8B7CFF" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,8" IsHitTestVisible="False"/>
+          <Border Width="1" Height="14" Background="#8B7CFF" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,8" IsHitTestVisible="False"/>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+</Styles>

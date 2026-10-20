@@ -1,0 +1,75 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Jarvis.Desktop.Controls"
+             xmlns:vm="using:Jarvis.Desktop.ViewModels"
+             x:Class="Jarvis.Desktop.Views.LoginView"
+             x:DataType="vm:LoginViewModel"
+             x:Name="Root">
+  <Grid>
+    <Ellipse x:Name="Orb"
+             Width="520"
+             Height="520"
+             HorizontalAlignment="Center"
+             VerticalAlignment="Center"
+             IsHitTestVisible="False"
+             Opacity="0.85"
+             RenderTransformOrigin="50%,50%">
+      <Ellipse.RenderTransform>
+        <RotateTransform/>
+      </Ellipse.RenderTransform>
+      <Ellipse.Fill>
+        <ConicGradientBrush>
+          <GradientStop Color="#003EE0FF" Offset="0"/>
+          <GradientStop Color="#738B7CFF" Offset="0.35"/>
+          <GradientStop Color="#003EE0FF" Offset="0.55"/>
+          <GradientStop Color="#593EE0FF" Offset="0.78"/>
+          <GradientStop Color="#00D16BFF" Offset="1"/>
+        </ConicGradientBrush>
+      </Ellipse.Fill>
+      <Ellipse.Styles>
+        <Style Selector="Ellipse#Orb">
+          <Style.Animations>
+            <Animation Duration="0:0:28" IterationCount="Infinite">
+              <KeyFrame Cue="0%">
+                <Setter Property="RotateTransform.Angle" Value="0"/>
+              </KeyFrame>
+              <KeyFrame Cue="100%">
+                <Setter Property="RotateTransform.Angle" Value="360"/>
+              </KeyFrame>
+            </Animation>
+          </Style.Animations>
+        </Style>
+      </Ellipse.Styles>
+    </Ellipse>
+
+    <controls:GlassCard Width="440" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24">
+      <StackPanel Spacing="14">
+        <controls:JarvisMark Width="64" Height="64"/>
+        <TextBlock Text="FUTURE-UI-V1" Classes="kicker"/>
+        <TextBlock Classes="hero">
+          <Run Text="JAR"/><Run Text="VIS" Foreground="#3EE0FF"/>
+        </TextBlock>
+        <TextBlock Text="Dostęp tylko na zaproszenie administratora." Classes="muted"/>
+        <StackPanel Spacing="12">
+          <StackPanel Spacing="6">
+            <TextBlock Text="ADRES API" Classes="field-label"/>
+            <TextBox Text="{Binding ApiBase, UpdateSourceTrigger=PropertyChanged}" Watermark="http://localhost:8080"/>
+          </StackPanel>
+          <StackPanel Spacing="6">
+            <TextBlock Text="EMAIL" Classes="field-label"/>
+            <TextBox x:Name="EmailBox" Text="{Binding Email, UpdateSourceTrigger=PropertyChanged}" Watermark="ty@domena"/>
+          </StackPanel>
+          <StackPanel Spacing="6">
+            <TextBlock Text="HASŁO" Classes="field-label"/>
+            <TextBox Text="{Binding Password, UpdateSourceTrigger=PropertyChanged}" PasswordChar="•" Watermark="Hasło"/>
+          </StackPanel>
+          <TextBlock Text="{Binding Error}" Classes="alert" IsVisible="{Binding HasError}"/>
+          <Button Classes="fx" Command="{Binding LoginCommand}" HorizontalAlignment="Stretch" Content="{Binding SubmitLabel}"/>
+        </StackPanel>
+      </StackPanel>
+    </controls:GlassCard>
+  </Grid>
+  <UserControl.KeyBindings>
+    <KeyBinding Gesture="Enter" Command="{Binding LoginCommand}"/>
+  </UserControl.KeyBindings>
+</UserControl>

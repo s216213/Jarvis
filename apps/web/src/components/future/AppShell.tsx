@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type ReactNode, type SVGProps } from "react";
 import { api, type JarvisVersion } from "@/lib/api";
 import { clearSession, getToken, getUser, isAdmin, subscribeSession } from "@/lib/auth";
+import { JarvisMark } from "@/components/future/JarvisMark";
 import { JarvisVersionLines } from "@/components/future/JarvisVersion";
 import { browserName, deviceFingerprint, deviceSystem } from "@/lib/device";
 import { CLIENT_VERSION, FUTURE_UI } from "@/lib/future";
@@ -107,7 +108,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="fx-app">
       <aside className="fx-side">
         <Link href="/chat" className="fx-brand">
-          <span className="fx-mark" aria-hidden />
+          <JarvisMark />
           <span className="fx-brand-copy">
             <strong>Jarvis</strong>
             {jarvis?.brain_version ? <small>{jarvis.brain_version}</small> : null}

@@ -1,0 +1,73 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Jarvis.Desktop.ViewModels"
+        xmlns:views="using:Jarvis.Desktop.Views"
+        xmlns:controls="using:Jarvis.Desktop.Controls"
+        x:Class="Jarvis.Desktop.MainWindow"
+        x:DataType="vm:SessionController"
+        Title="Jarvis"
+        Icon="/Assets/logo.png"
+        Width="1320"
+        Height="820"
+        MinWidth="960"
+        MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        Background="#060914"
+        UseLayoutRounding="True"
+        FontFamily="{StaticResource BodyFont}">
+  <Panel>
+    <controls:GridBackdrop IsHitTestVisible="False"/>
+    <Ellipse Width="720"
+             Height="440"
+             HorizontalAlignment="Left"
+             VerticalAlignment="Top"
+             Margin="-200,-180,0,0"
+             IsHitTestVisible="False">
+      <Ellipse.Fill>
+        <RadialGradientBrush>
+          <GradientStop Color="#293EE0FF" Offset="0"/>
+          <GradientStop Color="#003EE0FF" Offset="1"/>
+        </RadialGradientBrush>
+      </Ellipse.Fill>
+    </Ellipse>
+    <Ellipse Width="680"
+             Height="400"
+             HorizontalAlignment="Right"
+             VerticalAlignment="Top"
+             Margin="0,-140,-180,0"
+             IsHitTestVisible="False">
+      <Ellipse.Fill>
+        <RadialGradientBrush>
+          <GradientStop Color="#3D8B7CFF" Offset="0"/>
+          <GradientStop Color="#008B7CFF" Offset="1"/>
+        </RadialGradientBrush>
+      </Ellipse.Fill>
+    </Ellipse>
+    <Ellipse Width="520"
+             Height="320"
+             HorizontalAlignment="Right"
+             VerticalAlignment="Bottom"
+             Margin="0,0,-80,-120"
+             IsHitTestVisible="False">
+      <Ellipse.Fill>
+        <RadialGradientBrush>
+          <GradientStop Color="#24D16BFF" Offset="0"/>
+          <GradientStop Color="#00D16BFF" Offset="1"/>
+        </RadialGradientBrush>
+      </Ellipse.Fill>
+    </Ellipse>
+    <ContentControl Content="{Binding Current}">
+      <ContentControl.DataTemplates>
+        <DataTemplate DataType="vm:BootViewModel">
+          <views:BootView/>
+        </DataTemplate>
+        <DataTemplate DataType="vm:LoginViewModel">
+          <views:LoginView/>
+        </DataTemplate>
+        <DataTemplate DataType="vm:ShellViewModel">
+          <views:ShellView/>
+        </DataTemplate>
+      </ContentControl.DataTemplates>
+    </ContentControl>
+  </Panel>
+</Window>

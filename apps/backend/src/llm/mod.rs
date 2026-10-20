@@ -1,10 +1,19 @@
+//! Free-tier pool. Jarvis picks one model per turn from every configured provider.
+//! The choice follows the task, each model's free-tier quota, prompt size, and
+//! cooldowns learned from provider errors. A failed call falls through to the
+//! next best fit. `LLM_MODEL` pins a single id and turns task routing off.
+
 pub mod gemini;
+pub mod groq;
 pub mod limits;
 pub mod provider;
+pub mod route;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use serde::Serialize;
 use tokio::sync::RwLock;
 
 use crate::{
@@ -12,122 +21,459 @@ use crate::{
     error::{AppError, AppResult},
 };
 
-use gemini::{GeminiProvider, pick_latest_model};
-use provider::{ChatTurn, LlmProvider, ModelInfo};
+use gemini::GeminiProvider;
+use groq::GroqProvider;
+use provider::{model_rank, ChatTurn, LlmProvider, ModelInfo};
+use route::{SlotUsage, plan, profile_turn};
 
-#[derive(Clone, Debug)]
+const MAX_MODELS_PER_PROVIDER: usize = 8;
+#[derive(Clone, Debug, Serialize)]
 pub struct ActiveModel {
     pub provider: String,
     pub model: String,
-    pub source: String, // auto | pinned
+    pub source: String, // routed | auto | pinned
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct PoolStatus {
+    pub provider: String,
+    pub model: String,
+    pub source: String,
+    pub slots: Vec<ActiveModel>,
+    pub models: Vec<ModelInfo>,
 }
 
 pub struct LlmRuntime {
-    provider: Arc<dyn LlmProvider>,
+    providers: Vec<Arc<dyn LlmProvider>>,
     pinned: Option<String>,
-    cache: RwLock<ModelCache>,
+    cache: RwLock<PoolCache>,
+    health: RwLock<HashMap<String, SlotHealth>>,
 }
 
-struct ModelCache {
-    active: Option<ActiveModel>,
+#[derive(Clone)]
+struct Slot {
+    provider_index: usize,
+    model: String,
+}
+
+#[derive(Default)]
+struct SlotHealth {
+    hits: Vec<(Instant, u32)>,
+    cooldown_until: Option<Instant>,
+}
+
+impl SlotHealth {
+    fn usage(&mut self, now: Instant) -> SlotUsage {
+        let day = Duration::from_secs(24 * 3600);
+        let minute = Duration::from_secs(60);
+        self.hits
+            .retain(|(at, _)| now.saturating_duration_since(*at) < day);
+        let mut rpm_used: u32 = 0;
+        let mut tpm_used: u32 = 0;
+        for (at, tokens) in &self.hits {
+            if now.saturating_duration_since(*at) < minute {
+                rpm_used += 1;
+                tpm_used = tpm_used.saturating_add(*tokens);
+            }
+        }
+        let cooldown_left_sec = self
+            .cooldown_until
+            .and_then(|until| until.checked_duration_since(now))
+            .map(|left| left.as_secs().max(1))
+            .unwrap_or(0);
+        SlotUsage {
+            rpm_used,
+            rpd_used: self.hits.len() as u32,
+            tpm_used,
+            cooldown_left_sec,
+        }
+    }
+
+    fn record(&mut self, now: Instant, tokens: u32) {
+        self.hits.push((now, tokens));
+    }
+
+    fn cool_down(&mut self, now: Instant, secs: u64) {
+        let until = now + Duration::from_secs(secs.max(1));
+        if self.cooldown_until.is_none_or(|current| until > current) {
+            self.cooldown_until = Some(until);
+        }
+    }
+}
+
+struct PoolCache {
+    slots: Vec<Slot>,
     models: Vec<ModelInfo>,
+    provider_summary: String,
+    model_summary: String,
+    source: String,
     fetched_at: Option<Instant>,
 }
 
 impl LlmRuntime {
     pub async fn from_config(config: &Config) -> AppResult<Self> {
-        let provider: Arc<dyn LlmProvider> = match config.llm_provider.as_str() {
-            "gemini" => {
-                let key = config
-                    .gemini_api_key
-                    .clone()
-                    .ok_or_else(|| AppError::BadRequest("GEMINI_API_KEY missing".into()))?;
-                Arc::new(GeminiProvider::new(key))
-            }
-            "groq" | "openrouter" => {
-                return Err(AppError::BadRequest(format!(
-                    "LLM_PROVIDER={} is not configured yet",
-                    config.llm_provider
-                )));
-            }
-            other => {
-                return Err(AppError::BadRequest(format!(
-                    "unknown LLM_PROVIDER={other}"
-                )));
-            }
-        };
+        let mut providers: Vec<Arc<dyn LlmProvider>> = Vec::new();
+        for name in &config.llm_providers {
+            let provider: Arc<dyn LlmProvider> = match name.as_str() {
+                "gemini" => {
+                    let key = config.gemini_api_key.clone().ok_or_else(|| {
+                        AppError::BadRequest("GEMINI_API_KEY missing".into())
+                    })?;
+                    Arc::new(GeminiProvider::new(key))
+                }
+                "groq" => {
+                    let key = config
+                        .groq_api_key
+                        .clone()
+                        .ok_or_else(|| AppError::BadRequest("GROQ_API_KEY missing".into()))?;
+                    Arc::new(GroqProvider::new(key))
+                }
+                "openrouter" => {
+                    return Err(AppError::BadRequest(
+                        "LLM provider openrouter is not configured yet".into(),
+                    ));
+                }
+                other => {
+                    return Err(AppError::BadRequest(format!(
+                        "unknown LLM provider {other}"
+                    )));
+                }
+            };
+            providers.push(provider);
+        }
+
+        if providers.is_empty() {
+            return Err(AppError::BadRequest("no LLM providers configured".into()));
+        }
 
         let runtime = Self {
-            provider,
+            providers,
             pinned: config.llm_model.clone(),
-            cache: RwLock::new(ModelCache {
-                active: None,
-                models: vec![],
+            cache: RwLock::new(PoolCache {
+                slots: Vec::new(),
+                models: Vec::new(),
+                provider_summary: String::new(),
+                model_summary: String::new(),
+                source: "auto".into(),
                 fetched_at: None,
             }),
+            health: RwLock::new(HashMap::new()),
         };
         runtime.refresh().await?;
         Ok(runtime)
     }
 
-    pub fn provider_name(&self) -> &'static str {
-        self.provider.name()
-    }
+    pub async fn refresh(&self) -> AppResult<PoolStatus> {
+        let mut groups: Vec<Vec<Slot>> = Vec::new();
+        let mut models: Vec<ModelInfo> = Vec::new();
+        let mut errors: Vec<String> = Vec::new();
 
-    pub async fn refresh(&self) -> AppResult<ActiveModel> {
-        let models = self.provider.list_models().await?;
-        let active = if let Some(pin) = &self.pinned {
-            ActiveModel {
-                provider: self.provider.name().into(),
-                model: pin.clone(),
-                source: "pinned".into(),
-            }
-        } else {
-            let picked = pick_latest_model(models.clone()).ok_or_else(|| {
-                AppError::Upstream("no chat-capable models returned by provider".into())
-            })?;
-            ActiveModel {
-                provider: self.provider.name().into(),
-                model: picked.id,
-                source: "auto".into(),
-            }
-        };
-
-        tracing::info!(
-            provider = %active.provider,
-            model = %active.model,
-            source = %active.source,
-            "LLM model resolved"
-        );
-
-        let mut cache = self.cache.write().await;
-        cache.models = models;
-        cache.active = Some(active.clone());
-        cache.fetched_at = Some(Instant::now());
-        Ok(active)
-    }
-
-    async fn ensure_fresh(&self) -> AppResult<ActiveModel> {
-        {
-            let cache = self.cache.read().await;
-            if let (Some(active), Some(at)) = (&cache.active, cache.fetched_at) {
-                if at.elapsed() < Duration::from_secs(6 * 3600) {
-                    return Ok(active.clone());
+        for (index, provider) in self.providers.iter().enumerate() {
+            match provider.list_models().await {
+                Ok(list) => {
+                    let mut chat: Vec<ModelInfo> = list
+                        .into_iter()
+                        .filter(|m| m.supports_chat)
+                        .map(|mut model| {
+                            if model.provider.is_empty() {
+                                model.provider = provider.name().into();
+                            }
+                            model
+                        })
+                        .collect();
+                    if let Some(pin) = &self.pinned {
+                        chat.retain(|model| model.id == *pin);
+                    } else {
+                        chat.sort_by(|a, b| model_rank(&b.id).cmp(&model_rank(&a.id)));
+                        chat.truncate(MAX_MODELS_PER_PROVIDER);
+                    }
+                    if chat.is_empty() {
+                        errors.push(format!("{}: no chat models", provider.name()));
+                        continue;
+                    }
+                    groups.push(
+                        chat.iter()
+                            .map(|model| Slot {
+                                provider_index: index,
+                                model: model.id.clone(),
+                            })
+                            .collect(),
+                    );
+                    models.extend(chat);
+                }
+                Err(err) => {
+                    tracing::warn!(provider = provider.name(), error = %err, "LLM model list failed");
+                    errors.push(format!("{}: {err}", provider.name()));
                 }
             }
         }
-        self.refresh().await
+
+        if groups.is_empty() {
+            return Err(AppError::Upstream(format!(
+                "no chat models available ({})",
+                errors.join("; ")
+            )));
+        }
+
+        let slots = interleave(groups);
+        let source = if self.pinned.is_some() {
+            "pinned"
+        } else if slots.len() > 1 {
+            "routed"
+        } else {
+            "auto"
+        };
+        let provider_summary = provider_summary(&slots, &self.providers);
+        let model_summary = model_summary(&slots);
+
+        tracing::info!(
+            providers = %provider_summary,
+            models = slots.len(),
+            source,
+            "LLM pool resolved"
+        );
+
+        let status = self.view_from(&slots, &models, &provider_summary, &model_summary, source);
+        let mut cache = self.cache.write().await;
+        cache.slots = slots;
+        cache.models = models;
+        cache.provider_summary = provider_summary;
+        cache.model_summary = model_summary;
+        cache.source = source.into();
+        cache.fetched_at = Some(Instant::now());
+        Ok(status)
     }
 
-    pub async fn status(&self) -> AppResult<(ActiveModel, Vec<ModelInfo>)> {
-        let active = self.ensure_fresh().await?;
-        let models = self.cache.read().await.models.clone();
-        Ok((active, models))
+    async fn ensure_fresh(&self) -> AppResult<()> {
+        let stale = {
+            let cache = self.cache.read().await;
+            if cache.fetched_at.is_some_and(|at| at.elapsed() < Duration::from_secs(6 * 3600))
+                && !cache.slots.is_empty()
+            {
+                return Ok(());
+            }
+            !cache.slots.is_empty()
+        };
+        match self.refresh().await {
+            Ok(_) => Ok(()),
+            Err(err) if stale => {
+                tracing::warn!(error = %err, "LLM refresh failed, keeping the previous pool");
+                Ok(())
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    pub async fn status(&self) -> AppResult<PoolStatus> {
+        self.ensure_fresh().await?;
+        let cache = self.cache.read().await;
+        Ok(self.view_from(
+            &cache.slots,
+            &cache.models,
+            &cache.provider_summary,
+            &cache.model_summary,
+            &cache.source,
+        ))
     }
 
     pub async fn complete(&self, messages: &[ChatTurn]) -> AppResult<(String, ActiveModel)> {
-        let active = self.ensure_fresh().await?;
-        let reply = self.provider.complete(&active.model, messages).await?;
-        Ok((reply, active))
+        self.ensure_fresh().await?;
+        let (slots, source) = {
+            let cache = self.cache.read().await;
+            (cache.slots.clone(), cache.source.clone())
+        };
+        if slots.is_empty() {
+            return Err(AppError::Upstream("LLM pool is empty".into()));
+        }
+
+        let profile = profile_turn(messages);
+        let names: Vec<&str> = slots
+            .iter()
+            .map(|slot| self.providers[slot.provider_index].name())
+            .collect();
+        let model_ids: Vec<&str> = slots.iter().map(|slot| slot.model.as_str()).collect();
+        let usage = {
+            let mut health = self.health.write().await;
+            let now = Instant::now();
+            (0..slots.len())
+                .map(|index| {
+                    health
+                        .entry(slot_key(names[index], model_ids[index]))
+                        .or_default()
+                        .usage(now)
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let route_plan = plan(&profile, &names, &model_ids, &usage);
+
+        if route_plan.picks.is_empty() {
+            return Err(AppError::RateLimited {
+                message: "Every free-tier model is at its quota".into(),
+                retry_after_sec: route_plan.retry_after_sec,
+                scope: "provider".into(),
+            });
+        }
+
+        let mut last_err: Option<AppError> = None;
+        for pick in &route_plan.picks {
+            let slot = &slots[pick.index];
+            let provider = &self.providers[slot.provider_index];
+            match provider.complete(&slot.model, messages).await {
+                Ok(reply) => {
+                    self.remember(&provider.name(), &slot.model, profile.estimated_tokens.saturating_add(256), None)
+                        .await;
+                    tracing::info!(
+                        task = ?profile.kind,
+                        tokens = profile.estimated_tokens,
+                        provider = provider.name(),
+                        model = %slot.model,
+                        score = pick.score,
+                        "LLM routed"
+                    );
+                    return Ok((
+                        reply,
+                        ActiveModel {
+                            provider: provider.name().into(),
+                            model: slot.model.clone(),
+                            source,
+                        },
+                    ));
+                }
+                Err(err) => {
+                    let cooldown = match &err {
+                        AppError::RateLimited { retry_after_sec, .. } => *retry_after_sec,
+                        _ => 20,
+                    };
+                    self.remember(&provider.name(), &slot.model, profile.estimated_tokens, Some(cooldown))
+                        .await;
+                    tracing::warn!(
+                        task = ?profile.kind,
+                        provider = provider.name(),
+                        model = %slot.model,
+                        error = %err,
+                        "LLM candidate failed, trying the next fit"
+                    );
+                    last_err = Some(err);
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| AppError::Upstream("LLM pool failed".into())))
+    }
+
+    async fn remember(&self, provider: &str, model: &str, tokens: u32, cooldown_sec: Option<u64>) {
+        let mut health = self.health.write().await;
+        let entry = health.entry(slot_key(provider, model)).or_default();
+        let now = Instant::now();
+        entry.record(now, tokens);
+        if let Some(secs) = cooldown_sec {
+            entry.cool_down(now, secs);
+        }
+    }
+
+    fn view_from(
+        &self,
+        slots: &[Slot],
+        models: &[ModelInfo],
+        provider_summary: &str,
+        model_summary: &str,
+        source: &str,
+    ) -> PoolStatus {
+        let active_slots = slots
+            .iter()
+            .map(|slot| ActiveModel {
+                provider: self.providers[slot.provider_index].name().into(),
+                model: slot.model.clone(),
+                source: source.into(),
+            })
+            .collect();
+        PoolStatus {
+            provider: provider_summary.into(),
+            model: model_summary.into(),
+            source: source.into(),
+            slots: active_slots,
+            models: models.to_vec(),
+        }
+    }
+}
+
+fn provider_summary(slots: &[Slot], providers: &[Arc<dyn LlmProvider>]) -> String {
+    let mut names = Vec::new();
+    for slot in slots {
+        let name = providers[slot.provider_index].name();
+        if !names.iter().any(|existing: &String| existing == name) {
+            names.push(name.to_string());
+        }
+    }
+    names.join(" · ")
+}
+
+fn model_summary(slots: &[Slot]) -> String {
+    match slots {
+        [] => "brak".into(),
+        [only] => only.model.clone(),
+        many => format!("{} {}", many.len(), plural_modele(many.len())),
+    }
+}
+
+fn slot_key(provider: &str, model: &str) -> String {
+    format!("{provider}\n{model}")
+}
+
+fn plural_modele(n: usize) -> &'static str {
+    let n10 = n % 10;
+    let n100 = n % 100;
+    if (2..5).contains(&n10) && !(12..15).contains(&n100) {
+        "modele"
+    } else {
+        "modeli"
+    }
+}
+
+fn interleave(groups: Vec<Vec<Slot>>) -> Vec<Slot> {
+    let max = groups.iter().map(Vec::len).max().unwrap_or(0);
+    let mut out = Vec::new();
+    for index in 0..max {
+        for group in &groups {
+            if let Some(slot) = group.get(index) {
+                out.push(slot.clone());
+            }
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{interleave, plural_modele, Slot};
+
+    fn slot(provider_index: usize, model: &str) -> Slot {
+        Slot {
+            provider_index,
+            model: model.into(),
+        }
+    }
+
+    #[test]
+    fn pool_alternates_providers() {
+        let mixed = interleave(vec![
+            vec![slot(0, "gemini-a"), slot(0, "gemini-b")],
+            vec![slot(1, "groq-a"), slot(1, "groq-b"), slot(1, "groq-c")],
+        ]);
+        let ids: Vec<_> = mixed.iter().map(|s| s.model.as_str()).collect();
+        assert_eq!(
+            ids,
+            ["gemini-a", "groq-a", "gemini-b", "groq-b", "groq-c"]
+        );
+    }
+
+    #[test]
+    fn polish_model_plural() {
+        assert_eq!(plural_modele(2), "modele");
+        assert_eq!(plural_modele(4), "modele");
+        assert_eq!(plural_modele(5), "modeli");
+        assert_eq!(plural_modele(12), "modeli");
+        assert_eq!(plural_modele(22), "modele");
     }
 }

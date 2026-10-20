@@ -106,7 +106,7 @@ export default function ResourcesPage() {
 
           <section className="fx-card">
             <h3>Dyski</h3>
-            <div className="fx-table-wrap">
+            <div className="fx-table-wrap fx-table-scroll">
               <table>
                 <thead>
                   <tr>
@@ -126,7 +126,7 @@ export default function ResourcesPage() {
                           <div className="fx-note">{disk.name || "wolumen"}</div>
                         </td>
                         <td>{disk.scope === "host" ? "OCI host" : "Proces API"}</td>
-                        <td style={{ minWidth: 140 }}>
+                        <td>
                           <div className="fx-bar" aria-hidden>
                             <span style={{ width: `${percent}%` }} />
                           </div>
