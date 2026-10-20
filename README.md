@@ -128,4 +128,4 @@ Shared look for web, Android, and desktop. Tokens: [`design/future-ui-v1/tokens.
 
 Jarvis version is three parts: the client UI version, `brain_version` (this API, `GET /version`), and the host system version. Device registration stays separate (`ui_version`, `client_version`, `system_name`, `system_version`).
 
-Admin tools (OCI resources, terminal, accounts, devices, feature flags) live in `apps/web` under `/admin`. VM metrics are snapshots polled every 5 seconds. On OCI, compose runs the terminal in the host namespaces (`JARVIS_HOST_EXEC=host`).
+Admin tools (OCI resources, terminal, accounts, devices, feature flags) live in `apps/web` under `/admin`. VM metrics are snapshots polled every 5 seconds. On OCI, compose runs the terminal in the host namespaces (`JARVIS_HOST_EXEC=host`) with AppArmor unconfined, so `nsenter` can open `/proc/1/ns`.

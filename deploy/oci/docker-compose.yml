@@ -25,10 +25,15 @@ services:
       - .env
     # Host namespaces so the admin terminal and disk view see the OCI VM,
     # not only the container. Admin JWT is the gate for /admin/host/exec.
+    # AppArmor's docker-default profile blocks opening /proc/1/ns/*, which
+    # makes nsenter fail with "Permission denied" even as root.
     pid: host
     user: "0:0"
     cap_add:
       - SYS_ADMIN
+      - SYS_PTRACE
+    security_opt:
+      - apparmor:unconfined
     environment:
       PORT: "8080"
       RUST_LOG: ${RUST_LOG:-jarvis_api=info,tower_http=info}
